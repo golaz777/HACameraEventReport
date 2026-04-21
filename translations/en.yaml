@@ -1,0 +1,19 @@
+configuration:
+  cameras:
+    name: Cameras
+    description: List of cameras to monitor for motion
+  report:
+    name: Report Settings
+    description: Configure nightly report delivery
+  notification:
+    name: HA Notification
+    description: Send HA persistent notification at sunrise
+  event_cooldown_seconds:
+    name: Event Cooldown (seconds)
+    description: Minimum seconds between recorded events per camera (default 30)
+  media_path:
+    name: Storage Path
+    description: Directory for storing snapshots and reports (default /data/camera_events — always persistent)
+  monitoring:
+    name: Away Monitoring
+    description: Toggle entity to start/stop monitoring (e.g. input_boolean.away_mode)

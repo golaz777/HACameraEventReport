@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Test</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface2: #273244;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-dim: rgba(59,130,246,0.15);
+            --success-bg: rgba(16,185,129,0.15);
+            --success-text: #34d399;
+            --warn-bg: rgba(245,158,11,0.15);
+            --warn-text: #fbbf24;
+            --error-bg: rgba(239,68,68,0.15);
+            --error-text: #f87171;
+            --grey-bg: rgba(156,163,175,0.15);
+            --grey-text: #9ca3af;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* NAV */
+        .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; align-items: center; gap: 1.5rem; height: 52px; }
+        .topbar-brand { font-size: 0.95rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.01em; white-space: nowrap; }
+        .topbar-brand svg { opacity: 0.8; }
+        .topbar-nav { display: flex; gap: 0.25rem; align-items: center; }
+        .nav-link { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.85rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: background 0.15s, color 0.15s; }
+        .nav-link:hover { background: var(--surface2); color: var(--text); }
+        .nav-link.active { background: var(--accent-dim); color: var(--accent); }
+
+        /* CONTENT */
+        .content { max-width: 860px; margin: 0 auto; padding: 1.75rem 1rem; }
+        h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 1.5rem; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+        .camera-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
+        .test-btn { padding: 0.35rem 1rem; font-size: 0.875rem; font-weight: 500; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .test-btn:hover { background: var(--accent-hover); }
+        .test-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .result { margin-top: 0.75rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.82rem; font-weight: 500; }
+        .badge-green { background: var(--success-bg); color: var(--success-text); }
+        .badge-amber { background: var(--warn-bg); color: var(--warn-text); }
+        .badge-grey  { background: var(--grey-bg); color: var(--grey-text); }
+        .error-banner { background: var(--error-bg); color: var(--error-text); padding: 0.45rem 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; font-size: 0.875rem; }
+        .snapshot { margin-top: 0.75rem; max-width: 100%; border-radius: 6px; display: block; border: 1px solid var(--border); }
+        .empty { color: var(--text-muted); text-align: center; padding: 3rem 0; }
+    </style>
+</head>
+<body>
+    <nav class="topbar">
+        <div class="topbar-brand">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Camera Monitor
+        </div>
+        <div class="topbar-nav">
+            <a class="nav-link" href="{{ ingress_path }}/">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Reports
+            </a>
+            <a class="nav-link active" href="{{ ingress_path }}/camera-test">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                Camera Test
+            </a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Camera Test</h1>
+        {% for camera in cameras %}
+        <div class="card">
+            <div class="camera-name">{{ camera.name }}</div>
+            <button class="test-btn" id="btn-{{ camera.slug }}" onclick="runTest('{{ camera.slug }}')">Test snapshot</button>
+            <div class="result" id="result-{{ camera.slug }}"></div>
+        </div>
+        {% else %}
+        <p class="empty">No cameras configured.</p>
+        {% endfor %}
+    </div>
+
+    <script>
+    const INGRESS_PATH = {{ ingress_path | tojson }};
+    async function runTest(slug) {
+        const btn = document.getElementById('btn-' + slug);
+        const resultDiv = document.getElementById('result-' + slug);
+        btn.disabled = true;
+        resultDiv.innerHTML = '<span class="badge badge-grey">Testing\u2026</span>';
+        try {
+            const resp = await fetch(INGRESS_PATH + '/test/' + slug, { method: 'POST' });
+            const data = await resp.json();
+            let html = '';
+            if (!data.ok) {
+                html += '<div class="error-banner">Snapshot unavailable</div>';
+            } else {
+                html += '<span class="badge badge-green">Snapshot \u2713</span>';
+            }
+            if (data.snapshot_b64) {
+                html += '<img class="snapshot" src="data:image/jpeg;base64,' + data.snapshot_b64 + '" alt="Camera snapshot">';
+            } else {
+                html += '<br><span class="badge badge-amber" style="margin-top:0.5rem;display:inline-block;">No snapshot</span>';
+            }
+            resultDiv.innerHTML = html;
+        } catch (e) {
+            resultDiv.innerHTML = '<div class="error-banner">Request failed: ' + e.message + '</div>';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+    </script>
+</body>
+</html>

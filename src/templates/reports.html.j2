@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Reports</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface2: #273244;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-dim: rgba(59,130,246,0.15);
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* NAV */
+        .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; align-items: center; gap: 1.5rem; height: 52px; }
+        .topbar-brand { font-size: 0.95rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.01em; white-space: nowrap; }
+        .topbar-brand svg { opacity: 0.8; }
+        .topbar-nav { display: flex; gap: 0.25rem; align-items: center; }
+        .nav-link { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.85rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: background 0.15s, color 0.15s; }
+        .nav-link:hover { background: var(--surface2); color: var(--text); }
+        .nav-link.active { background: var(--accent-dim); color: var(--accent); }
+
+        /* CONTENT */
+        .content { max-width: 860px; margin: 0 auto; padding: 1.75rem 1rem; }
+        .page-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
+        h1 { font-size: 1.35rem; font-weight: 700; }
+        .report-count-badge { font-size: 0.8rem; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 0.15rem 0.65rem; }
+
+        /* DATE GROUPS */
+        .date-group { margin-bottom: 1.25rem; }
+        .date-heading { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.45rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); }
+        .report-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+        .report-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.65rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; transition: border-color 0.15s; }
+        .report-item:hover { border-color: #4b5563; }
+        .report-meta { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+        .report-file { font-size: 0.875rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, monospace; }
+        .report-count { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; background: var(--surface2); border-radius: 4px; padding: 0.1rem 0.4rem; }
+        .actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
+        .view-btn { padding: 0.28rem 0.75rem; font-size: 0.82rem; font-weight: 500; text-decoration: none; background: var(--accent); color: #fff; border-radius: 6px; border: none; cursor: pointer; transition: background 0.15s; }
+        .view-btn:hover { background: var(--accent-hover); }
+        .del-btn { padding: 0.28rem 0.65rem; font-size: 0.82rem; font-weight: 500; background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .del-btn:hover { background: rgba(239,68,68,0.1); }
+        .del-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .empty { color: var(--text-muted); text-align: center; padding: 3rem 0; }
+
+        /* PAGINATION */
+        .pagination { display: flex; align-items: center; justify-content: center; gap: 0.35rem; margin-top: 2rem; flex-wrap: wrap; }
+        .pg-btn { min-width: 2.1rem; height: 2.1rem; padding: 0 0.5rem; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.875rem; font-weight: 500; text-decoration: none; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); transition: background 0.15s, color 0.15s, border-color 0.15s; cursor: pointer; }
+        .pg-btn:hover:not(.pg-btn-active):not(.pg-btn-disabled) { background: var(--surface2); color: var(--text); border-color: #4b5563; }
+        .pg-btn-active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .pg-btn-disabled { opacity: 0.35; pointer-events: none; }
+        .pg-ellipsis { color: var(--text-muted); padding: 0 0.2rem; font-size: 0.875rem; user-select: none; }
+    </style>
+</head>
+<body>
+    <nav class="topbar">
+        <div class="topbar-brand">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Camera Monitor
+        </div>
+        <div class="topbar-nav">
+            <a class="nav-link active" href="{{ ingress_path }}/">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Reports
+            </a>
+            <a class="nav-link" href="{{ ingress_path }}/camera-test">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                Camera Test
+            </a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <div class="page-header">
+            <h1>Camera Reports</h1>
+            {% if total > 0 %}
+            <span class="report-count-badge">{{ total }} report{{ "s" if total != 1 else "" }}</span>
+            {% endif %}
+        </div>
+
+        {% if reports %}
+        {% for date, group in reports | groupby("date") | sort(attribute="grouper", reverse=true) %}
+        <div class="date-group">
+            <div class="date-heading">{{ date }}</div>
+            <ul class="report-list" id="list-{{ date }}">
+                {% for r in group %}
+                <li class="report-item" id="item-{{ r.date }}-{{ r.filename }}">
+                    <div class="report-meta">
+                        <span class="report-file">{{ r.filename }}</span>
+                        {% if r.event_count is not none %}
+                        <span class="report-count">{{ r.event_count }} event{{ "s" if r.event_count != 1 else "" }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="actions">
+                        <a class="view-btn" href="{{ ingress_path }}/reports/view/{{ r.date }}/{{ r.filename }}">View</a>
+                        <button class="del-btn" onclick="deleteReport('{{ r.date }}', '{{ r.filename }}', this)">Delete</button>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+
+        {% if total_pages > 1 %}
+        <div class="pagination" id="pagination">
+            {% set cur = page %}
+            {% set tot = total_pages %}
+            {# Prev #}
+            {% if cur > 1 %}
+            <a class="pg-btn" href="{{ ingress_path }}/?page={{ cur - 1 }}">&#8592;</a>
+            {% else %}
+            <span class="pg-btn pg-btn-disabled">&#8592;</span>
+            {% endif %}
+
+            {# Page numbers with ellipsis #}
+            {% for p in range(1, tot + 1) %}
+                {% if p == 1 or p == tot or (p >= cur - 2 and p <= cur + 2) %}
+                    {% if loop.index > 1 %}
+                        {% set prev_p = loop.previtem if loop.previtem is defined else 0 %}
+                        {# check gap #}
+                    {% endif %}
+                    <a class="pg-btn {% if p == cur %}pg-btn-active{% endif %}" href="{{ ingress_path }}/?page={{ p }}">{{ p }}</a>
+                {% elif p == cur - 3 or p == cur + 3 %}
+                    <span class="pg-ellipsis">&hellip;</span>
+                {% endif %}
+            {% endfor %}
+
+            {# Next #}
+            {% if cur < tot %}
+            <a class="pg-btn" href="{{ ingress_path }}/?page={{ cur + 1 }}">&#8594;</a>
+            {% else %}
+            <span class="pg-btn pg-btn-disabled">&#8594;</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <p class="empty" id="empty-msg">No reports found.</p>
+        {% endif %}
+    </div>
+
+    <script>
+    const INGRESS_PATH = {{ ingress_path | tojson }};
+    async function deleteReport(date, filename, btn) {
+        if (!confirm('Delete report ' + filename + '?')) return;
+        btn.disabled = true;
+        try {
+            const resp = await fetch(
+                INGRESS_PATH + '/reports/delete/' + encodeURIComponent(date) + '/' + encodeURIComponent(filename),
+                { method: 'DELETE' }
+            );
+            if (resp.ok) {
+                const item = document.getElementById('item-' + date + '-' + filename);
+                item.remove();
+                const list = document.getElementById('list-' + date);
+                if (list && list.children.length === 0) {
+                    list.closest('.date-group').remove();
+                    if (document.querySelectorAll('.date-group').length === 0) {
+                        const empty = document.createElement('p');
+                        empty.className = 'empty';
+                        empty.textContent = 'No reports found.';
+                        document.querySelector('.content').appendChild(empty);
+                    }
+                }
+            } else {
+                alert('Failed to delete report.');
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            btn.disabled = false;
+        }
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Motion Report – {{ night }}</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --surface: #1f2937;
+      --border: #374151;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #3b82f6;
+      --th-bg: #1a2540;
+      --row-alt: #18222f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); max-width: 980px; margin: 0 auto; padding: 1.5rem 1rem; }
+    h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 1.25rem; }
+    .summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: 0.9rem; line-height: 1.8; }
+    .summary strong { color: var(--text-muted); font-weight: 500; }
+    .summary span { color: var(--text); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    th { background: var(--th-bg); color: var(--text-muted); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.6rem 1rem; text-align: left; }
+    td { padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 0.9rem; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: var(--row-alt); }
+    img { max-width: 240px; max-height: 180px; border-radius: 4px; display: block; cursor: zoom-in; border: 1px solid var(--border); }
+    .img-link:hover img { opacity: 0.8; }
+    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; cursor: zoom-out; }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px; box-shadow: 0 4px 32px #000; border: none; }
+    .no-snap { color: var(--text-muted); font-style: italic; font-size: 0.85rem; }
+    .no-events { color: var(--text-muted); font-style: italic; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Motion Report</h1>
+  <div class="summary">
+    <strong>Date:</strong> <span>{{ night }}</span><br>
+    <strong>Window:</strong> <span>{{ sunset_time }} → {{ sunrise_time }}</span><br>
+    <strong>Total events:</strong> <span>{{ events|length }}</span>
+  </div>
+
+  {% if events %}
+  <table>
+    <thead>
+      <tr><th>Time (CET)</th><th>Camera</th><th>Screenshot</th></tr>
+    </thead>
+    <tbody>
+      {% for event in events %}
+      <tr>
+        <td>{{ event.timestamp.strftime("%H:%M:%S") }}</td>
+        <td>{{ event.camera_name }}</td>
+        <td>
+          {% if event.screenshot_b64 %}
+          <a class="img-link" href="#" onclick="openLightbox(this);return false;">
+            <img src="data:image/jpeg;base64,{{ event.screenshot_b64 }}" alt="snapshot {{ event.camera_name }}">
+          </a>
+          {% else %}
+          <span class="no-snap">snapshot unavailable</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="no-events">No motion events detected during this session.</p>
+  {% endif %}
+
+  <div id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="full size snapshot">
+  </div>
+  <script>
+    function openLightbox(link) {
+      document.getElementById('lightbox-img').src = link.querySelector('img').src;
+      document.getElementById('lightbox').classList.add('open');
+    }
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('open');
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  </script>
+</body>
+</html>

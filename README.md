@@ -91,7 +91,7 @@ monitoring:
 4. When toggle turns off (home), the add-on generates an HTML report for the away period
 5. Report is saved to media folder, notification sent, and email dispatched if configured
 
-Without `monitoring.toggle_entity`, monitoring runs continuously.
+Without `monitoring.toggle_entity`, monitoring does NOT run.
 
 ## Supported architectures
 

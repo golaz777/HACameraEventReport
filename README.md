@@ -79,6 +79,10 @@ monitoring:
   toggle_entity: input_boolean.away_mode
 ```
 
+## Screenshots
+
+![Report list](docs/screenshots/report-list.png)
+
 ## How it works
 
 1. Add-on subscribes to HA state changes

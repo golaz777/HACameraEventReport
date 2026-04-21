@@ -93,6 +93,10 @@ Without `monitoring.toggle_entity`, monitoring runs continuously.
 
 `aarch64` · `amd64` · `armhf` · `armv7` · `i386`
 
+## AI Disclaimer
+
+Parts of this project were developed with assistance from AI tools (Claude by Anthropic). All code has been reviewed and tested by the author. Use at your own risk.
+
 ## License
 
 MIT

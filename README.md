@@ -1,6 +1,6 @@
 # Camera Event Report
 
-A Home Assistant add-on that monitors cameras for motion events while you're away and generates HTML reports with screenshots. Reports are viewable directly in the HA sidebar and optionally sent by email.
+A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras for motion events while you're away and generates HTML reports with screenshots. Reports are viewable directly in the HA sidebar and optionally sent by email.
 
 ## Features
 

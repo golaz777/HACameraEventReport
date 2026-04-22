@@ -52,7 +52,7 @@ async def test_setup_starts_web_server():
         app = App()
         await app.setup()
 
-    mock_ws_cls.assert_called_once_with(mock_config, mock_ha)
+    mock_ws_cls.assert_called_once_with(mock_config, mock_ha, mock_ws_cls.call_args[0][2])
     mock_web.start.assert_called_once()
 
 

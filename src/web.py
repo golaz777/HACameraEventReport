@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import base64
+import json
 import logging
 import os
 import tempfile
@@ -19,9 +20,10 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
 class WebServer:
-    def __init__(self, config: Config, ha_client: HAClient):
+    def __init__(self, config: Config, ha_client: HAClient, broadcaster=None):
         self._config = config
         self._ha = ha_client
+        self._broadcaster = broadcaster
         self._env = Environment(
             loader=FileSystemLoader(str(_TEMPLATE_DIR)),
             autoescape=True,
@@ -30,6 +32,8 @@ class WebServer:
         self._app = web.Application()
         self._app.router.add_get("/", self._handle_reports)
         self._app.router.add_get("/camera-test", self._handle_root)
+        self._app.router.add_get("/live", self._handle_live)
+        self._app.router.add_get("/events/stream", self._handle_events_stream)
         self._app.router.add_post("/test/{slug}", self._handle_test)
         self._app.router.add_get("/reports/view/{date}/{filename}", self._handle_report_file)
         self._app.router.add_delete("/reports/delete/{date}/{filename}", self._handle_report_delete)
@@ -110,6 +114,37 @@ class WebServer:
                     "snapshot_b64": snapshot_b64,
                 }
             )
+
+    async def _handle_live(self, request: web.Request) -> web.Response:
+        ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
+        template = self._env.get_template("live.html.j2")
+        html = template.render(ingress_path=ingress_path)
+        return web.Response(text=html, content_type="text/html")
+
+    async def _handle_events_stream(self, request: web.Request) -> web.StreamResponse:
+        if self._broadcaster is None:
+            return web.Response(status=503, text="Event broadcaster not available")
+
+        resp = web.StreamResponse()
+        resp.headers["Content-Type"] = "text/event-stream"
+        resp.headers["Cache-Control"] = "no-cache"
+        resp.headers["X-Accel-Buffering"] = "no"
+        await resp.prepare(request)
+
+        q = self._broadcaster.subscribe()
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(q.get(), timeout=25.0)
+                    payload = json.dumps(data)
+                    await resp.write(f"data: {payload}\n\n".encode())
+                except asyncio.TimeoutError:
+                    await resp.write(b": heartbeat\n\n")
+        except (ConnectionResetError, ConnectionAbortedError):
+            pass
+        finally:
+            self._broadcaster.unsubscribe(q)
+        return resp
 
     async def _handle_reports(self, request: web.Request) -> web.Response:
         ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 _CET = ZoneInfo("Europe/Paris")
 
+from src.broadcaster import EventBroadcaster
 from src.config import load_config, Config
 from src.ha_client import HAClient
 from src.presence_guard import PresenceGuard
@@ -33,6 +34,7 @@ class App:
         self._away_start: datetime | None = None
         self._listen_task: asyncio.Task | None = None
         self._web_server: WebServer | None = None
+        self._broadcaster: EventBroadcaster | None = None
 
     async def setup(self) -> None:
         self.config = load_config()
@@ -40,7 +42,8 @@ class App:
         await self.ha.connect()
         self._listen_task = asyncio.create_task(self.ha.listen())
 
-        self._web_server = WebServer(self.config, self.ha)
+        self._broadcaster = EventBroadcaster()
+        self._web_server = WebServer(self.config, self.ha, self._broadcaster)
         await self._web_server.start()
 
         self.store = EventStore(self.config.media_path)
@@ -52,7 +55,7 @@ class App:
             self.presence_guard = PresenceGuard()
 
         self.handler = EventHandler(
-            self.config, self.ha, self.store, self.presence_guard
+            self.config, self.ha, self.store, self.presence_guard, self._broadcaster
         )
         self.notifier = Notifier(self.config, self.ha)
 

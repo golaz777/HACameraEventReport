@@ -1,5 +1,7 @@
 from __future__ import annotations
+import base64
 import logging
+import os
 from datetime import datetime, timezone
 
 from src.config import CameraConfig, Config
@@ -10,11 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class EventHandler:
-    def __init__(self, config: Config, ha_client, store: EventStore, presence_guard=None):
+    def __init__(self, config: Config, ha_client, store: EventStore, presence_guard=None, broadcaster=None):
         self._config = config
         self._ha = ha_client
         self._store = store
         self._presence_guard = presence_guard
+        self._broadcaster = broadcaster
         self._last_trigger: dict[str, datetime] = {}
 
     def _in_cooldown(self, camera: CameraConfig, now: datetime) -> bool:
@@ -42,15 +45,28 @@ class EventHandler:
         if screenshot_path is None:
             logger.warning("Snapshot unavailable for %s", camera.name)
 
-        self._store.append(
-            now.date(),
-            MotionEvent(
-                timestamp=now,
-                camera_name=camera.name,
-                camera_entity=camera.entity_id,
-                screenshot_path=screenshot_path,
-            ),
+        event = MotionEvent(
+            timestamp=now,
+            camera_name=camera.name,
+            camera_entity=camera.entity_id,
+            screenshot_path=screenshot_path,
         )
+        self._store.append(now.date(), event)
+
+        if self._broadcaster is not None:
+            screenshot_b64: str | None = None
+            if screenshot_path and os.path.exists(screenshot_path):
+                try:
+                    with open(screenshot_path, "rb") as f:
+                        screenshot_b64 = base64.b64encode(f.read()).decode("ascii")
+                except Exception:
+                    pass
+            self._broadcaster.publish({
+                "timestamp": now.isoformat(),
+                "camera_name": camera.name,
+                "camera_entity": camera.entity_id,
+                "screenshot_b64": screenshot_b64,
+            })
 
     async def on_ha_state_changed(self, ha_event: dict) -> None:
         """HA fallback: handle binary_sensor state_changed events."""

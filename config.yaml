@@ -1,5 +1,5 @@
 name: "Camera Event Report"
-version: "1.0.1"
+version: "1.0.2"
 slug: "camera_event_report"
 description: "Monitor cameras for motion when away, with screenshot reports"
 arch:

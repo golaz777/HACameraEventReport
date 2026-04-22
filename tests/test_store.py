@@ -105,3 +105,98 @@ def test_screenshot_path_can_be_none(tmp_path):
     )
     events = store.read(night)
     assert events[0].screenshot_path is None
+
+
+def test_list_dates_returns_sorted_dates(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    dates = [date(2026, 4, 10), date(2026, 4, 12), date(2026, 4, 11)]
+
+    for d in dates:
+        store.append(
+            d,
+            MotionEvent(
+                timestamp=datetime(d.year, d.month, d.day, 10, 0, 0, tzinfo=timezone.utc),
+                camera_name="Cam",
+                camera_entity="camera.cam",
+                screenshot_path=None,
+            ),
+        )
+
+    result = store.list_dates()
+    assert result == sorted(dates)
+
+
+def test_list_dates_empty(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    assert store.list_dates() == []
+
+
+def test_read_range_single_date(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    d = date(2026, 4, 12)
+    event = MotionEvent(
+        timestamp=datetime(2026, 4, 12, 10, 0, 0, tzinfo=timezone.utc),
+        camera_name="Cam",
+        camera_entity="camera.cam",
+        screenshot_path=None,
+    )
+    store.append(d, event)
+
+    result = store.read_range(d, d)
+    assert len(result) == 1
+    assert d in result
+    assert len(result[d]) == 1
+    assert result[d][0].camera_name == "Cam"
+
+
+def test_read_range_multiple_dates(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    start = date(2026, 4, 10)
+    end = date(2026, 4, 12)
+
+    for i in range(3):
+        d = start + timedelta(days=i)
+        store.append(
+            d,
+            MotionEvent(
+                timestamp=datetime(d.year, d.month, d.day, 10, 0, 0, tzinfo=timezone.utc),
+                camera_name=f"Cam{i}",
+                camera_entity=f"camera.cam{i}",
+                screenshot_path=None,
+            ),
+        )
+
+    result = store.read_range(start, end)
+    assert len(result) == 3
+    assert all(d in result for d in [start, start + timedelta(days=1), end])
+
+
+def test_read_range_includes_zero_days(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    start = date(2026, 4, 10)
+    end = date(2026, 4, 12)
+
+    # Only add event on start date
+    store.append(
+        start,
+        MotionEvent(
+            timestamp=datetime(start.year, start.month, start.day, 10, 0, 0, tzinfo=timezone.utc),
+            camera_name="Cam",
+            camera_entity="camera.cam",
+            screenshot_path=None,
+        ),
+    )
+
+    result = store.read_range(start, end)
+    # Should include all dates, with empty lists for dates with no events
+    assert len(result) == 3
+    assert len(result[start]) == 1
+    assert len(result[start + timedelta(days=1)]) == 0
+    assert len(result[end]) == 0
+
+
+def test_read_range_empty(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    result = store.read_range(date(2026, 4, 10), date(2026, 4, 12))
+    assert len(result) == 3
+    assert all(len(events) == 0 for events in result.values())

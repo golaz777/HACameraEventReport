@@ -294,3 +294,164 @@ async def test_get_report_view_rejects_path_traversal(tmp_path):
         assert resp.status in (400, 404)
     finally:
         await client.close()
+
+
+# ---------------------------------------------------------------------------
+# GET / with filter params (start, end, min_events)
+# ---------------------------------------------------------------------------
+
+async def test_get_reports_filter_by_date_range(tmp_path):
+    # Create reports for different dates
+    for day_offset in [0, 1, 2]:
+        day_dir = tmp_path / f"2026-04-{12 + day_offset}"
+        day_dir.mkdir()
+        (day_dir / "report.html").write_text(
+            "<html><strong>Total events:</strong> 1</html>"
+        )
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        # Query only first 2 dates
+        resp = await client.get("/?start=2026-04-12&end=2026-04-13")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "2026-04-12" in text
+        assert "2026-04-13" in text
+        assert "2026-04-14" not in text
+    finally:
+        await client.close()
+
+
+async def test_get_reports_filter_by_min_events(tmp_path):
+    # Create reports with different event counts
+    day1 = tmp_path / "2026-04-12"
+    day1.mkdir()
+    (day1 / "report.html").write_text("<html><strong>Total events:</strong> 5</html>")
+
+    day2 = tmp_path / "2026-04-13"
+    day2.mkdir()
+    (day2 / "report.html").write_text("<html><strong>Total events:</strong> 0</html>")
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        # Only show reports with at least 1 event
+        resp = await client.get("/?min_events=1")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "2026-04-12" in text
+        assert "2026-04-13" not in text
+    finally:
+        await client.close()
+
+
+async def test_get_reports_combined_filters(tmp_path):
+    for day_offset in [0, 1, 2]:
+        day_dir = tmp_path / f"2026-04-{12 + day_offset}"
+        day_dir.mkdir()
+        count = day_offset + 1
+        (day_dir / "report.html").write_text(
+            f"<html><strong>Total events:</strong> {count}</html>"
+        )
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        # Filter: only days 12-13, with at least 1 event
+        resp = await client.get("/?start=2026-04-12&end=2026-04-13&min_events=1")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "2026-04-12" in text
+        assert "2026-04-13" in text
+        assert "2026-04-14" not in text
+    finally:
+        await client.close()
+
+
+# ---------------------------------------------------------------------------
+# GET /analytics
+# ---------------------------------------------------------------------------
+
+async def test_get_analytics_empty(tmp_path):
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/analytics")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "Analytics" in text or "Total Events" in text
+    finally:
+        await client.close()
+
+
+async def test_get_analytics_with_events(tmp_path):
+    from src.store import EventStore, MotionEvent
+    from datetime import date, datetime, timezone
+
+    store = EventStore(base_path=str(tmp_path))
+    d = date(2026, 4, 12)
+    store.append(
+        d,
+        MotionEvent(
+            timestamp=datetime(2026, 4, 12, 10, 0, 0, tzinfo=timezone.utc),
+            camera_name="Front Door",
+            camera_entity="camera.front_door",
+            screenshot_path=None,
+        ),
+    )
+    store.append(
+        d,
+        MotionEvent(
+            timestamp=datetime(2026, 4, 12, 14, 0, 0, tzinfo=timezone.utc),
+            camera_name="Back Yard",
+            camera_entity="camera.back_yard",
+            screenshot_path=None,
+        ),
+    )
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/analytics?days=1")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "Front Door" in text or "camera" in text.lower()
+        assert "2" in text  # 2 total events
+    finally:
+        await client.close()
+
+
+async def test_get_analytics_custom_date_range(tmp_path):
+    from src.store import EventStore, MotionEvent
+    from datetime import date, datetime, timedelta, timezone
+
+    store = EventStore(base_path=str(tmp_path))
+    for day_offset in range(3):
+        d = date(2026, 4, 12) + timedelta(days=day_offset)
+        store.append(
+            d,
+            MotionEvent(
+                timestamp=datetime(d.year, d.month, d.day, 10, 0, 0, tzinfo=timezone.utc),
+                camera_name="Cam",
+                camera_entity="camera.cam",
+                screenshot_path=None,
+            ),
+        )
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        # Query last 2 days
+        resp = await client.get("/analytics?days=2")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "2" in text  # Should show 2 events in last 2 days
+    finally:
+        await client.close()

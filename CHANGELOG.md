@@ -2,6 +2,17 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.1.0] - 2026-04-22
+
+### Added
+- **Event filtering** — filter reports by date range and minimum event count
+- **Analytics dashboard** — new "Analytics" tab shows motion statistics
+  - Events per day (bar chart)
+  - Events per camera (bar chart)
+  - Events by hour of day (heatmap)
+  - Summary stats: total events, peak day, busiest camera
+- **EventStore enhancements** — `read_range()` for multi-day queries, `list_dates()` for date enumeration
+
 ## [1.0.2] - 2026-04-22
 
 ### Added

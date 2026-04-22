@@ -11,6 +11,8 @@ A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras f
 - Optional email delivery via SMTP
 - Built-in web panel accessible from the HA sidebar (ingress)
 - **Live event stream dashboard** — real-time feed of motion events with snapshots, no refresh needed
+- **Event filtering** — filter reports by date range and minimum event count
+- **Analytics dashboard** — view motion patterns with per-day, per-camera, and hourly statistics
 - Camera test panel to verify snapshot capture works
 - Monitoring can be toggled via any HA entity (input_boolean, person, etc.)
 - Automatic retention policy to purge event data older than a configurable number of days

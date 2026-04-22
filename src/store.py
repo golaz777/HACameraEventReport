@@ -74,3 +74,31 @@ class EventStore:
                     )
                 )
         return events
+
+    def list_dates(self) -> list[date]:
+        """Return sorted list of dates that have events.json files."""
+        if not self._base.exists():
+            return []
+        dates = []
+        for entry in self._base.iterdir():
+            if not entry.is_dir():
+                continue
+            try:
+                d = date.fromisoformat(entry.name)
+                dates.append(d)
+            except ValueError:
+                continue
+        return sorted(dates)
+
+    def read_range(self, start: date, end: date) -> dict[date, list[MotionEvent]]:
+        """Read events for each date in [start, end] inclusive.
+
+        Returns a dict mapping each date to a list of events.
+        Dates with no events are included with empty lists.
+        """
+        result = {}
+        current = start
+        while current <= end:
+            result[current] = self.read(current)
+            current += timedelta(days=1)
+        return result

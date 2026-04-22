@@ -60,6 +60,19 @@
         .pg-btn-active { background: var(--accent); border-color: var(--accent); color: #fff; }
         .pg-btn-disabled { opacity: 0.35; pointer-events: none; }
         .pg-ellipsis { color: var(--text-muted); padding: 0 0.2rem; font-size: 0.875rem; user-select: none; }
+
+        /* FILTER FORM */
+        .filter-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+        .filter-title { font-size: 0.875rem; font-weight: 600; color: var(--text); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
+        .filter-group { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
+        .filter-input-group { display: flex; flex-direction: column; gap: 0.3rem; }
+        .filter-input-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .filter-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 0.4rem 0.6rem; font-size: 0.875rem; }
+        .filter-input:focus { outline: none; border-color: var(--accent); }
+        .filter-btn { padding: 0.4rem 1rem; font-size: 0.875rem; font-weight: 500; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .filter-btn:hover { background: var(--accent-hover); }
+        .filter-reset { padding: 0.4rem 1rem; font-size: 0.875rem; font-weight: 500; background: transparent; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+        .filter-reset:hover { background: var(--surface2); color: var(--text); }
     </style>
 </head>
 <body>
@@ -78,8 +91,12 @@
                 Live
             </a>
             <a class="nav-link" href="{{ ingress_path }}/camera-test">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17v2H2v-2"/><rect x="3" y="5" width="18" height="12" rx="2"/></svg>
                 Camera Test
+            </a>
+            <a class="nav-link" href="{{ ingress_path }}/analytics">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 17"/><polyline points="17 6 23 6 23 12"/></svg>
+                Analytics
             </a>
         </div>
     </nav>
@@ -90,6 +107,32 @@
             {% if total > 0 %}
             <span class="report-count-badge">{{ total }} report{{ "s" if total != 1 else "" }}</span>
             {% endif %}
+        </div>
+
+        <!-- FILTER FORM -->
+        <div class="filter-section">
+            <div class="filter-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                Filter
+            </div>
+            <form method="get" class="filter-group">
+                <div class="filter-input-group">
+                    <label class="filter-input-label">Start Date</label>
+                    <input class="filter-input" type="date" name="start" value="{{ filter_start }}" />
+                </div>
+                <div class="filter-input-group">
+                    <label class="filter-input-label">End Date</label>
+                    <input class="filter-input" type="date" name="end" value="{{ filter_end }}" />
+                </div>
+                <div class="filter-input-group">
+                    <label class="filter-input-label">Min Events</label>
+                    <input class="filter-input" type="number" name="min_events" min="0" value="{{ filter_min_events }}" style="width: 80px;" />
+                </div>
+                <button class="filter-btn" type="submit">Apply</button>
+                {% if filter_start or filter_end or filter_min_events > 0 %}
+                <a href="{{ ingress_path }}/" class="filter-reset">Reset</a>
+                {% endif %}
+            </form>
         </div>
 
         {% if reports %}

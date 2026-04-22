@@ -44,6 +44,8 @@ class App:
         await self._web_server.start()
 
         self.store = EventStore(self.config.media_path)
+        if self.config.retention_days is not None:
+            self.store.purge_old(self.config.retention_days)
 
         # Create PresenceGuard before EventHandler so it can be passed in
         if self.config.monitoring.toggle_entity:

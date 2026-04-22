@@ -1,8 +1,12 @@
 from __future__ import annotations
 import json
+import logging
+import shutil
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -33,6 +37,22 @@ class EventStore:
         }
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+    def purge_old(self, retention_days: int) -> None:
+        """Remove day directories older than retention_days from today."""
+        cutoff = date.today() - timedelta(days=retention_days)
+        if not self._base.exists():
+            return
+        for entry in self._base.iterdir():
+            if not entry.is_dir():
+                continue
+            try:
+                day = date.fromisoformat(entry.name)
+            except ValueError:
+                continue
+            if day < cutoff:
+                shutil.rmtree(entry)
+                logger.info("Purged old event directory: %s", entry.name)
 
     def read(self, night: date) -> list[MotionEvent]:
         path = self._log_path(night)

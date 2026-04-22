@@ -33,6 +33,7 @@ class Config:
     ha_persistent: bool
     event_cooldown_seconds: int = 30
     media_path: str = "/data/camera_events"
+    retention_days: int | None = 30
     monitoring: MonitoringConfig = field(
         default_factory=lambda: MonitoringConfig(toggle_entity="")
     )
@@ -81,11 +82,21 @@ def load_config(path: str = "/data/options.json") -> Config:
         toggle_entity=monitoring_data.get("toggle_entity", "")
     )
 
+    _retention_sentinel = object()
+    raw_retention = data.get("retention_days", _retention_sentinel)
+    if raw_retention is _retention_sentinel:
+        retention_days: int | None = 30  # default when key absent
+    elif raw_retention in (None, ""):
+        retention_days = None  # explicit empty = disabled
+    else:
+        retention_days = int(raw_retention)
+
     return Config(
         cameras=cameras,
         email=email,
         ha_persistent=ha_persistent,
         event_cooldown_seconds=data.get("event_cooldown_seconds", 30),
         media_path=data.get("media_path", "/data/camera_events"),
+        retention_days=retention_days,
         monitoring=monitoring,
     )

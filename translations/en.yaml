@@ -14,6 +14,9 @@ configuration:
   media_path:
     name: Storage Path
     description: Directory for storing snapshots and reports (default /data/camera_events — always persistent)
+  retention_days:
+    name: Retention (days)
+    description: Delete event data older than this many days on startup. Leave empty to disable cleanup (default 30)
   monitoring:
     name: Away Monitoring
     description: Toggle entity to start/stop monitoring (e.g. input_boolean.away_mode)

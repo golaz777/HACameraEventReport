@@ -1,5 +1,5 @@
 name: "Camera Event Report"
-version: "1.0.0"
+version: "1.0.1"
 slug: "camera_event_report"
 description: "Monitor cameras for motion when away, with screenshot reports"
 arch:
@@ -32,6 +32,7 @@ options:
     ha_persistent: true
   event_cooldown_seconds: 30
   media_path: "/data/camera_events"
+  retention_days: 30
   monitoring:
     toggle_entity: ""
 schema:
@@ -52,5 +53,6 @@ schema:
     ha_persistent: bool
   event_cooldown_seconds: int
   media_path: str
+  retention_days: int?
   monitoring:
     toggle_entity: str

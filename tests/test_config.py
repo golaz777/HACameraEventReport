@@ -182,6 +182,36 @@ def test_load_config_media_path_defaults_to_data(tmp_path):
     assert config.media_path == "/data/camera_events"
 
 
+def test_load_config_retention_days_default(tmp_path):
+    options = _minimal_options([])
+    options_file = tmp_path / "options.json"
+    options_file.write_text(json.dumps(options))
+
+    config = load_config(str(options_file))
+
+    assert config.retention_days == 30
+
+
+def test_load_config_retention_days_explicit(tmp_path):
+    options = {**_minimal_options([]), "retention_days": 7}
+    options_file = tmp_path / "options.json"
+    options_file.write_text(json.dumps(options))
+
+    config = load_config(str(options_file))
+
+    assert config.retention_days == 7
+
+
+def test_load_config_retention_days_empty_disables(tmp_path):
+    options = {**_minimal_options([]), "retention_days": None}
+    options_file = tmp_path / "options.json"
+    options_file.write_text(json.dumps(options))
+
+    config = load_config(str(options_file))
+
+    assert config.retention_days is None
+
+
 def test_load_config_monitoring_defaults_to_empty(tmp_path):
     options = {
         "cameras": [],

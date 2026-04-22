@@ -12,6 +12,7 @@ A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras f
 - Built-in web panel accessible from the HA sidebar (ingress)
 - Camera test panel to verify snapshot capture works
 - Monitoring can be toggled via any HA entity (input_boolean, person, etc.)
+- Automatic retention policy to purge event data older than a configurable number of days
 
 ## Installation
 
@@ -38,6 +39,7 @@ A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras f
 | `event_cooldown_seconds` | int | Minimum seconds between events per camera (default: 30) |
 | `media_path` | string | Storage path for reports and snapshots (default: `/data/camera_events`) |
 | `monitoring.toggle_entity` | string | HA entity to control monitoring on/off (e.g. `input_boolean.away_mode`) |
+| `retention_days` | int (optional) | Delete event data older than this many days on startup (default: 30, leave empty to disable) |
 
 ### Camera configuration
 
@@ -75,6 +77,7 @@ notification:
   ha_persistent: true
 
 event_cooldown_seconds: 30
+retention_days: 30
 monitoring:
   toggle_entity: input_boolean.away_mode
 ```

@@ -11,6 +11,7 @@ async def test_setup_connects_ha_and_subscribes_events():
     mock_config.ha_persistent = False
     mock_config.media_path = "/media/camera_events"
     mock_config.event_cooldown_seconds = 30
+    mock_config.retention_days = 30
     mock_config.monitoring.toggle_entity = ""
 
     mock_ha = AsyncMock()
@@ -35,6 +36,7 @@ async def test_setup_starts_web_server():
     mock_config.ha_persistent = False
     mock_config.media_path = "/media/camera_events"
     mock_config.event_cooldown_seconds = 30
+    mock_config.retention_days = 30
     mock_config.monitoring.toggle_entity = ""
 
     mock_ha = AsyncMock()
@@ -60,6 +62,7 @@ async def test_run_stops_web_server_after_listen_ends():
     mock_config.ha_persistent = False
     mock_config.media_path = "/media/camera_events"
     mock_config.event_cooldown_seconds = 30
+    mock_config.retention_days = 30
     mock_config.monitoring.toggle_entity = ""
 
     mock_ha = AsyncMock()
@@ -88,6 +91,7 @@ async def test_run_closes_ha_client_on_exception():
     mock_config.ha_persistent = False
     mock_config.media_path = "/media/camera_events"
     mock_config.event_cooldown_seconds = 30
+    mock_config.retention_days = 30
     mock_config.monitoring.toggle_entity = ""
 
     mock_ha = AsyncMock()
@@ -114,6 +118,7 @@ def _base_mock_config():
     mock_config.ha_persistent = False
     mock_config.media_path = "/media/camera_events"
     mock_config.event_cooldown_seconds = 30
+    mock_config.retention_days = 30
     mock_config.monitoring.toggle_entity = ""   # feature disabled by default
     return mock_config
 

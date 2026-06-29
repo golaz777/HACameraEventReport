@@ -26,6 +26,34 @@ A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras f
    ```
 3. Find **Camera Event Report** in the store and click **Install**
 
+## Updating
+
+Home Assistant only notices a new version after its add-on store cache is
+refreshed. After a new version is pushed, do this:
+
+1. Go to **Settings → Add-ons → Add-on Store**, open the menu (⋮) →
+   **Check for updates**, then hard-refresh the browser (**Ctrl+F5**).
+2. Open the add-on page — the **Update** button should now be available.
+   Click **Update**.
+
+**Always use Update, never Rebuild, to move to a new version.** Rebuild
+re-builds the *currently installed* version from source and leaves the
+installed version behind the store version, producing the error
+*"Local and store versions of app Camera Event Report differ, use Update
+instead of Rebuild."*
+
+If the **Update** button stays greyed out after a store reload, the
+Supervisor cache is stale. From the HA host terminal/SSH:
+
+```bash
+ha addons reload
+ha addons info camera_event_report   # confirm the new version is offered
+```
+
+If it still won't budge, restart the Supervisor (**Settings → System → ⋮ →
+Restart Supervisor**). Avoid uninstall/reinstall — that wipes the add-on
+configuration.
+
 ## Configuration
 
 | Option | Type | Description |

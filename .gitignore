@@ -21,7 +21,6 @@ htmlcov/
 
 # AI / Dev tooling
 .claude/
-CLAUDE.md
 docs/superpowers/
 
 # Secrets (in case added later)

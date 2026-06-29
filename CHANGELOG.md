@@ -2,6 +2,11 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.2.2] - 2026-06-29
+
+### Added
+- **Motion Report image navigation** — the snapshot lightbox in generated reports now supports browsing between images with the Left/Right arrow keys (or on-screen arrows), with a time/camera caption. Applies to newly generated reports.
+
 ## [1.2.1] - 2026-06-29
 
 ### Added

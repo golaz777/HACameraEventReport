@@ -4,11 +4,14 @@
    { open, close, nav } API. Relies on --surface / --border / --text CSS vars
    defined by the host page. See report.html.j2 and live.html.j2. #}
 <style>
-  .lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; padding: 2rem; }
-  #lb-img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: none; cursor: zoom-out; }
-  .lb-caption { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; color: var(--text); background: rgba(31,41,55,0.9); border: 1px solid var(--border); border-radius: 99px; padding: 0.3rem 0.9rem; font-variant-numeric: tabular-nums; }
-  .lb-btn { position: fixed; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 50%; cursor: pointer; line-height: 1; transition: background 0.15s, opacity 0.15s; }
-  .lb-btn:hover:not(:disabled) { background: var(--border); }
+  {# The lightbox keeps a dark photo-viewer backdrop in every theme, so its
+     chrome uses fixed light-on-dark colors rather than the host theme tokens
+     (which may resolve to dark text on a light surface). #}
+  .lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(2,6,23,0.92); display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  #lb-img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); border: none; cursor: zoom-out; }
+  .lb-caption { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; color: #f1f5f9; background: rgba(15,23,42,0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.14); border-radius: 99px; padding: 0.35rem 0.95rem; font-variant-numeric: tabular-nums; }
+  .lb-btn { position: fixed; display: flex; align-items: center; justify-content: center; background: rgba(15,23,42,0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #f1f5f9; border: 1px solid rgba(255,255,255,0.16); border-radius: 50%; cursor: pointer; line-height: 1; transition: background 0.15s, opacity 0.15s; }
+  .lb-btn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
   .lb-btn:disabled { opacity: 0.25; cursor: default; }
   .lb-close { top: 1rem; right: 1.25rem; width: 2.4rem; height: 2.4rem; font-size: 1.5rem; }
   .lb-nav { top: 50%; transform: translateY(-50%); width: 3rem; height: 3rem; font-size: 1.75rem; }

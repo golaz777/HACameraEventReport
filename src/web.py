@@ -70,7 +70,9 @@ class WebServer:
             for c in self._config.cameras
         ]
         template = self._env.get_template("panel.html.j2")
-        html = template.render(cameras=cameras, ingress_path=ingress_path)
+        html = template.render(
+            cameras=cameras, ingress_path=ingress_path, active_page="camera-test"
+        )
         return web.Response(text=html, content_type="text/html")
 
     async def _handle_test(self, request: web.Request) -> web.Response:
@@ -127,7 +129,7 @@ class WebServer:
     async def _handle_live(self, request: web.Request) -> web.Response:
         ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
         template = self._env.get_template("live.html.j2")
-        html = template.render(ingress_path=ingress_path)
+        html = template.render(ingress_path=ingress_path, active_page="live")
         return web.Response(text=html, content_type="text/html")
 
     async def _handle_events_stream(self, request: web.Request) -> web.StreamResponse:
@@ -223,6 +225,7 @@ class WebServer:
         html = template.render(
             reports=reports,
             ingress_path=ingress_path,
+            active_page="reports",
             page=page,
             total_pages=total_pages,
             total=total,
@@ -304,6 +307,7 @@ class WebServer:
         template = self._env.get_template("analytics.html.j2")
         html = template.render(
             ingress_path=ingress_path,
+            active_page="analytics",
             total_events=total_events,
             peak_day=peak_day,
             peak_count=peak_count,

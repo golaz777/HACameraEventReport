@@ -2,6 +2,11 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.3.0] - 2026-06-29
+
+### Changed
+- **Clean & bright redesign** — the web UI moves from the dark slate theme to an airy light one: white surfaces, soft indigo-tinted shadows, rounder corners, and a brighter blue accent. The topbar gains a gradient brand mark and pill navigation whose active page is shown as a filled gradient chip, and the Analytics stat cards get a gradient accent bar with larger numbers. Saved Motion Reports adopt the matching light theme; the fullscreen snapshot lightbox keeps its dark photo backdrop. No features or behavior changed.
+
 ## [1.2.2] - 2026-06-29
 
 ### Added

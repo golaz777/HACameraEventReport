@@ -28,17 +28,6 @@
     tr:nth-child(even) td { background: var(--row-alt); }
     img { max-width: 240px; max-height: 180px; border-radius: 4px; display: block; cursor: zoom-in; border: 1px solid var(--border); }
     .img-link:hover img { opacity: 0.8; }
-    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
-    #lightbox.open { display: flex; }
-    #lightbox img { max-width: 92vw; max-height: 85vh; border-radius: 6px; box-shadow: 0 4px 32px #000; border: none; cursor: zoom-out; }
-    .lb-caption { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 0.85rem; color: var(--text); background: rgba(31,41,55,0.9); border: 1px solid var(--border); border-radius: 99px; padding: 0.3rem 0.9rem; font-variant-numeric: tabular-nums; }
-    .lb-btn { position: fixed; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 50%; cursor: pointer; line-height: 1; transition: background 0.15s, opacity 0.15s; }
-    .lb-btn:hover:not(:disabled) { background: var(--border); }
-    .lb-btn:disabled { opacity: 0.25; cursor: default; }
-    .lb-close { top: 1rem; right: 1.25rem; width: 2.4rem; height: 2.4rem; font-size: 1.5rem; }
-    .lb-nav { top: 50%; transform: translateY(-50%); width: 3rem; height: 3rem; font-size: 1.75rem; }
-    .lb-prev { left: 1.25rem; }
-    .lb-next { right: 1.25rem; }
     .no-snap { color: var(--text-muted); font-style: italic; font-size: 0.85rem; }
     .no-events { color: var(--text-muted); font-style: italic; padding: 2rem 0; }
   </style>
@@ -78,54 +67,16 @@
   <p class="no-events">No motion events detected during this session.</p>
   {% endif %}
 
-  <div id="lightbox">
-    <button class="lb-btn lb-close" onclick="closeLightbox()" aria-label="Close">&times;</button>
-    <button class="lb-btn lb-nav lb-prev" id="lb-prev" onclick="navReport(-1)" aria-label="Previous">&#8249;</button>
-    <img id="lightbox-img" src="" alt="full size snapshot" onclick="closeLightbox()">
-    <button class="lb-btn lb-nav lb-next" id="lb-next" onclick="navReport(1)" aria-label="Next">&#8250;</button>
-    <div class="lb-caption" id="lb-caption"></div>
-  </div>
+  {% include "_lightbox.html.j2" %}
   <script>
-    var lbLinks = [];
-    var lbIndex = -1;
-    var lightbox = document.getElementById('lightbox');
-
-    function renderLb() {
-      var link = lbLinks[lbIndex];
-      document.getElementById('lightbox-img').src = link.querySelector('img').src;
-      document.getElementById('lb-caption').textContent = link.getAttribute('data-caption') || '';
-      document.getElementById('lb-prev').disabled = lbIndex <= 0;
-      document.getElementById('lb-next').disabled = lbIndex >= lbLinks.length - 1;
-    }
-
-    function openLightbox(link) {
-      lbLinks = Array.prototype.slice.call(document.querySelectorAll('.img-link'));
-      lbIndex = lbLinks.indexOf(link);
-      renderLb();
-      lightbox.classList.add('open');
-    }
-
-    function navReport(dir) {
-      var n = lbIndex + dir;
-      if (n < 0 || n >= lbLinks.length) return;
-      lbIndex = n;
-      renderLb();
-    }
-
-    function closeLightbox() {
-      lightbox.classList.remove('open');
-    }
-
-    lightbox.addEventListener('click', function(e) {
-      if (e.target === lightbox) closeLightbox();
+    function reportLinks() { return Array.prototype.slice.call(document.querySelectorAll('.img-link')); }
+    var lb = initLightbox({
+      src: function (n) { return n.querySelector('img').src; },
+      caption: function (n) { return n.getAttribute('data-caption'); },
+      prev: function (n) { var l = reportLinks(), i = l.indexOf(n); return i > 0 ? l[i - 1] : null; },
+      next: function (n) { var l = reportLinks(), i = l.indexOf(n); return i < l.length - 1 ? l[i + 1] : null; }
     });
-
-    document.addEventListener('keydown', function(e) {
-      if (!lightbox.classList.contains('open')) return;
-      if (e.key === 'Escape') closeLightbox();
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); navReport(-1); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); navReport(1); }
-    });
+    function openLightbox(link) { lb.open(link); }
   </script>
 </body>
 </html>

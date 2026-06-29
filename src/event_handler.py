@@ -1,11 +1,9 @@
 from __future__ import annotations
-import base64
 import logging
-import os
 from datetime import datetime, timezone
 
 from src.config import CameraConfig, Config
-from src.snapshot import take_snapshot
+from src.snapshot import encode_screenshot, take_snapshot
 from src.store import EventStore, MotionEvent
 
 logger = logging.getLogger(__name__)
@@ -54,13 +52,7 @@ class EventHandler:
         self._store.append(now.date(), event)
 
         if self._broadcaster is not None:
-            screenshot_b64: str | None = None
-            if screenshot_path and os.path.exists(screenshot_path):
-                try:
-                    with open(screenshot_path, "rb") as f:
-                        screenshot_b64 = base64.b64encode(f.read()).decode("ascii")
-                except Exception:
-                    pass
+            screenshot_b64 = encode_screenshot(screenshot_path)
             self._broadcaster.publish({
                 "timestamp": now.isoformat(),
                 "camera_name": camera.name,

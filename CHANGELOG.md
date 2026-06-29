@@ -2,6 +2,12 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.2.0] - 2026-06-29
+
+### Added
+- **Live page backlog** — the "Live" tab now loads today's already-detected events immediately on open (capped to the 50 most recent), instead of only showing events that arrive after the page connects. Reconnects no longer duplicate cards.
+- **Delete All reports** — new button on the "Camera Reports" page removes every report at once (with confirmation), backed by a `DELETE /reports/delete-all` endpoint.
+
 ## [1.1.0] - 2026-04-22
 
 ### Added

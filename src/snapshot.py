@@ -1,4 +1,5 @@
 from __future__ import annotations
+import base64
 import logging
 import os
 import re
@@ -11,6 +12,17 @@ logger = logging.getLogger(__name__)
 
 def _slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def encode_screenshot(path: str | None) -> str | None:
+    """Read an image file and return base64, or None if missing/unreadable."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except Exception:
+        return None
 
 
 def build_snapshot_path(base_path: str, camera: CameraConfig, ts: datetime) -> str:

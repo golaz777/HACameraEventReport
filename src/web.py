@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import aiohttp.web as web
 from jinja2 import Environment, FileSystemLoader
@@ -13,12 +13,16 @@ from jinja2 import Environment, FileSystemLoader
 from src.config import Config
 from src.ha_client import HAClient
 from src.report import list_reports
-from src.snapshot import _slugify
+from src.snapshot import _slugify, encode_screenshot
 from src.store import EventStore
 
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+# Max number of today's events sent to a Live client on connect (matches the
+# browser-side MAX_EVENTS cap in live.html.j2).
+_BACKLOG_LIMIT = 50
 
 
 class WebServer:
@@ -40,6 +44,7 @@ class WebServer:
         self._app.router.add_get("/events/stream", self._handle_events_stream)
         self._app.router.add_post("/test/{slug}", self._handle_test)
         self._app.router.add_get("/reports/view/{date}/{filename}", self._handle_report_file)
+        self._app.router.add_delete("/reports/delete-all", self._handle_reports_delete_all)
         self._app.router.add_delete("/reports/delete/{date}/{filename}", self._handle_report_delete)
         self._runner: web.AppRunner | None = None
 
@@ -135,8 +140,12 @@ class WebServer:
         resp.headers["X-Accel-Buffering"] = "no"
         await resp.prepare(request)
 
+        # Subscribe before building the backlog so no event detected while we
+        # read today's history is lost (the client dedupes any overlap).
         q = self._broadcaster.subscribe()
         try:
+            for item in self._build_today_backlog():
+                await resp.write(f"data: {json.dumps(item)}\n\n".encode())
             while True:
                 try:
                     data = await asyncio.wait_for(q.get(), timeout=25.0)
@@ -149,6 +158,26 @@ class WebServer:
         finally:
             self._broadcaster.unsubscribe(q)
         return resp
+
+    def _build_today_backlog(self) -> list[dict]:
+        """Today's persisted events as live-stream payloads, oldest-first.
+
+        Capped to the most recent _BACKLOG_LIMIT so the client (which keeps at
+        most that many cards) gets the same set it would retain anyway.
+        """
+        today = datetime.now(tz=timezone.utc).date()
+        events = self._store.read(today)
+        events.sort(key=lambda e: e.timestamp)
+        events = events[-_BACKLOG_LIMIT:]
+        return [
+            {
+                "timestamp": e.timestamp.isoformat(),
+                "camera_name": e.camera_name,
+                "camera_entity": e.camera_entity,
+                "screenshot_b64": encode_screenshot(e.screenshot_path),
+            }
+            for e in events
+        ]
 
     async def _handle_reports(self, request: web.Request) -> web.Response:
         ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
@@ -323,4 +352,22 @@ class WebServer:
         except OSError:
             pass
         logger.info("Report deleted: %s", path)
+        return web.Response(status=204)
+
+    async def _handle_reports_delete_all(self, request: web.Request) -> web.Response:
+        base = Path(self._config.media_path)
+        deleted = 0
+        if base.exists():
+            for day_dir in base.iterdir():
+                if not day_dir.is_dir():
+                    continue
+                for f in day_dir.glob("report*.html"):
+                    f.unlink()
+                    deleted += 1
+                # Remove the date directory if it is now empty
+                try:
+                    day_dir.rmdir()
+                except OSError:
+                    pass
+        logger.info("All reports deleted: %d files", deleted)
         return web.Response(status=204)

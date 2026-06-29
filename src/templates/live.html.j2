@@ -161,7 +161,12 @@
         } catch { return isoStr; }
     }
 
+    const seen = new Set();
     function addEvent(data) {
+        const key = data.timestamp + '|' + data.camera_entity;
+        if (seen.has(key)) return;
+        seen.add(key);
+
         eventCount++;
         countBadge.textContent = eventCount + ' event' + (eventCount !== 1 ? 's' : '');
         countBadge.style.display = '';

@@ -51,6 +51,9 @@
         .del-btn { padding: 0.28rem 0.65rem; font-size: 0.82rem; font-weight: 500; background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
         .del-btn:hover { background: rgba(239,68,68,0.1); }
         .del-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .del-all-btn { margin-left: auto; padding: 0.32rem 0.85rem; font-size: 0.82rem; font-weight: 600; background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .del-all-btn:hover { background: rgba(239,68,68,0.1); }
+        .del-all-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .empty { color: var(--text-muted); text-align: center; padding: 3rem 0; }
 
         /* PAGINATION */
@@ -106,6 +109,7 @@
             <h1>Camera Reports</h1>
             {% if total > 0 %}
             <span class="report-count-badge">{{ total }} report{{ "s" if total != 1 else "" }}</span>
+            <button class="del-all-btn" onclick="deleteAllReports(this)">Delete All</button>
             {% endif %}
         </div>
 
@@ -221,6 +225,23 @@
                 }
             } else {
                 alert('Failed to delete report.');
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteAllReports(btn) {
+        if (!confirm('Delete ALL reports? This cannot be undone.')) return;
+        btn.disabled = true;
+        try {
+            const resp = await fetch(INGRESS_PATH + '/reports/delete-all', { method: 'DELETE' });
+            if (resp.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete reports.');
                 btn.disabled = false;
             }
         } catch (e) {

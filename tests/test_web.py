@@ -1,11 +1,13 @@
 from __future__ import annotations
 import asyncio
 import base64
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from aiohttp.test_utils import TestClient, TestServer
 
 from src.config import CameraConfig
+from src.store import EventStore, MotionEvent
 from src.web import WebServer
 
 
@@ -215,6 +217,110 @@ async def test_delete_report_rejects_path_traversal(tmp_path):
     try:
         resp = await client.delete("/reports/delete/../../../etc/report_00-00-00.html")
         assert resp.status in (400, 404)
+    finally:
+        await client.close()
+
+
+# ---------------------------------------------------------------------------
+# Live backlog: _build_today_backlog()
+# ---------------------------------------------------------------------------
+
+def _event(ts: datetime, name: str = "Front Door", shot: str | None = None) -> MotionEvent:
+    return MotionEvent(
+        timestamp=ts,
+        camera_name=name,
+        camera_entity=f"camera.{name.lower().replace(' ', '_')}",
+        screenshot_path=shot,
+    )
+
+
+def test_backlog_returns_todays_events_oldest_first(tmp_path):
+    store = EventStore(str(tmp_path))
+    today = datetime.now(tz=timezone.utc)
+    t1 = today.replace(hour=8, minute=0, second=0, microsecond=0)
+    t2 = today.replace(hour=9, minute=0, second=0, microsecond=0)
+    # Append out of order to verify sorting.
+    store.append(today.date(), _event(t2, "Back Yard"))
+    store.append(today.date(), _event(t1, "Front Door"))
+
+    backlog = _make_server(media_path=str(tmp_path))._build_today_backlog()
+
+    assert [b["timestamp"] for b in backlog] == [t1.isoformat(), t2.isoformat()]
+    assert [b["camera_name"] for b in backlog] == ["Front Door", "Back Yard"]
+    assert all(b["screenshot_b64"] is None for b in backlog)
+
+
+def test_backlog_encodes_screenshot(tmp_path):
+    shot = tmp_path / "snap.jpg"
+    shot.write_bytes(b"\xff\xd8jpegbytes")
+    store = EventStore(str(tmp_path))
+    now = datetime.now(tz=timezone.utc)
+    store.append(now.date(), _event(now, shot=str(shot)))
+
+    backlog = _make_server(media_path=str(tmp_path))._build_today_backlog()
+
+    assert len(backlog) == 1
+    assert backlog[0]["screenshot_b64"] == base64.b64encode(b"\xff\xd8jpegbytes").decode()
+
+
+def test_backlog_caps_at_50_newest(tmp_path):
+    store = EventStore(str(tmp_path))
+    base = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(60):
+        store.append(base.date(), _event(base + timedelta(minutes=i)))
+
+    backlog = _make_server(media_path=str(tmp_path))._build_today_backlog()
+
+    assert len(backlog) == 50
+    # Newest 50 means events 10..59, oldest-first.
+    assert backlog[0]["timestamp"] == (base + timedelta(minutes=10)).isoformat()
+    assert backlog[-1]["timestamp"] == (base + timedelta(minutes=59)).isoformat()
+
+
+def test_backlog_excludes_other_days(tmp_path):
+    store = EventStore(str(tmp_path))
+    now = datetime.now(tz=timezone.utc)
+    yesterday = now - timedelta(days=1)
+    store.append(yesterday.date(), _event(yesterday, "Old"))
+    store.append(now.date(), _event(now, "New"))
+
+    backlog = _make_server(media_path=str(tmp_path))._build_today_backlog()
+
+    assert [b["camera_name"] for b in backlog] == ["New"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /reports/delete-all
+# ---------------------------------------------------------------------------
+
+async def test_delete_all_reports_removes_everything(tmp_path):
+    day1 = tmp_path / "2026-04-12"
+    day2 = tmp_path / "2026-04-13"
+    day1.mkdir()
+    day2.mkdir()
+    (day1 / "report_06-30-00.html").write_text("<html/>")
+    (day1 / "report_08-00-00.html").write_text("<html/>")
+    (day2 / "report_09-15-00.html").write_text("<html/>")
+
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.delete("/reports/delete-all")
+        assert resp.status == 204
+        assert not day1.exists()
+        assert not day2.exists()
+    finally:
+        await client.close()
+
+
+async def test_delete_all_reports_empty_returns_204(tmp_path):
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.delete("/reports/delete-all")
+        assert resp.status == 204
     finally:
         await client.close()
 

@@ -2,6 +2,11 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.2.1] - 2026-06-29
+
+### Added
+- **Live snapshot lightbox** — click any event row on the "Live" page to view its snapshot fullscreen, with a camera/timestamp caption. Navigate between snapshots with the Left/Right arrow keys (or on-screen arrows); close with Escape, the × button, or by clicking the backdrop.
+
 ## [1.2.0] - 2026-06-29
 
 ### Added

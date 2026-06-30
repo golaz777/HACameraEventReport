@@ -2,6 +2,11 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.4.0] - 2026-06-30
+
+### Changed
+- **Mobile-friendly navigation** — on narrow screens the topbar's four pill links (Reports, Live, Camera Test, Analytics) used to overflow into an invisible horizontal-scroll strip, making the last items hard to reach. Below 640px the pills now collapse behind a hamburger button that opens a full-width dropdown of the same links; it closes on link tap, outside-click, or Escape. Desktop is unchanged.
+
 ## [1.3.0] - 2026-06-29
 
 ### Changed

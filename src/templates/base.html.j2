@@ -94,6 +94,28 @@
         .nav-link:hover { background: var(--surface2); color: var(--text); }
         .nav-link.active { background: var(--accent-grad); color: #fff; box-shadow: 0 4px 14px rgba(37,99,235,0.30); }
 
+        /* Hamburger toggle + mobile dropdown — hidden on desktop */
+        .nav-toggle { display: none; margin-left: auto; align-items: center; justify-content: center; width: 42px; height: 42px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); cursor: pointer; transition: background var(--transition), box-shadow var(--transition); }
+        .nav-toggle:hover { background: var(--surface2); }
+        .mobile-nav { display: none; }
+
+        @media (max-width: 640px) {
+            .topbar { gap: 1rem; padding: 0 1rem; }
+            .topbar-nav { display: none; }
+            .nav-toggle { display: flex; }
+            .mobile-nav {
+                display: block; position: fixed; top: 64px; left: 0; right: 0; z-index: 60;
+                background: var(--surface); border-bottom: 1px solid var(--border);
+                box-shadow: var(--shadow-md); padding: 0.5rem;
+                border-radius: 0 0 var(--radius) var(--radius);
+                max-height: 0; overflow: hidden; opacity: 0; visibility: hidden;
+                transform: translateY(-8px); pointer-events: none;
+                transition: max-height var(--transition), opacity var(--transition), transform var(--transition), visibility var(--transition);
+            }
+            .mobile-nav.open { max-height: 70vh; opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto; }
+            .mobile-nav .nav-link { display: flex; min-height: 44px; border-radius: var(--radius-sm); padding: 0.65rem 0.95rem; font-size: 0.95rem; }
+        }
+
         /* CONTENT */
         .content { max-width: {% block content_width %}900px{% endblock %}; margin: 0 auto; padding: 2.25rem 1.25rem; }
 
@@ -123,13 +145,42 @@
             </a>
             {% endfor %}
         </div>
+        <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="mobile-nav">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
     </nav>
+    <div class="mobile-nav" id="mobile-nav">
+        {% for key, href, label, icon in nav_items %}
+        <a class="nav-link{% if active_page == key %} active{% endif %}" href="{{ href }}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ icon | safe }}</svg>
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
 
     <div class="content">
         {% block content %}{% endblock %}
     </div>
 
     {% block body_end %}{% endblock %}
+    <script>
+        (function () {
+            var btn = document.querySelector('.nav-toggle');
+            var menu = document.getElementById('mobile-nav');
+            if (!btn || !menu) return;
+            function close() { menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = menu.classList.toggle('open');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            menu.addEventListener('click', function (e) { if (e.target.closest('a')) close(); });
+            document.addEventListener('click', function (e) {
+                if (!menu.contains(e.target) && !btn.contains(e.target)) close();
+            });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+        })();
+    </script>
     {% block script %}{% endblock %}
 </body>
 </html>

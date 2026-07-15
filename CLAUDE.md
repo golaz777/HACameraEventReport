@@ -5,8 +5,18 @@ Guidance for AI assistants working in this repository.
 ## Project
 
 Home Assistant add-on that monitors cameras for motion while away and
-generates HTML reports with snapshots. Python (`aiohttp`) backend in `src/`,
-Jinja2 templates for the ingress web UI in `src/templates/`.
+generates HTML reports with snapshots. Python (`aiohttp`) backend in
+`camera_event_report/src/`, Jinja2 templates for the ingress web UI in
+`camera_event_report/src/templates/`.
+
+## Repository layout
+
+This repo is a **Home Assistant add-on repository**: `repository.yaml` at the
+root describes the repo, and the add-on itself lives in the
+`camera_event_report/` subdirectory (its slug), which is the Docker build
+context. `tests/` and `pyproject.toml` stay at the repo root; pytest imports
+`src` via `pythonpath = ["camera_event_report"]`. Do not move the add-on back to
+the root — the store requires this subdirectory layout.
 
 ## Web UI
 
@@ -23,13 +33,15 @@ Jinja2 templates for the ingress web UI in `src/templates/`.
 
 ## Releasing
 
-The version lives in **one place**: `version:` in `config.yaml`. There is no
-Dockerfile label, `build.yaml`, or `repository.json` to keep in sync.
+The version lives in **one place**: `version:` in
+`camera_event_report/config.yaml`. There is no Dockerfile label or `build.yaml`
+to keep in sync. The root `repository.yaml` is static and carries **no
+version**, so it never needs updating on a release.
 
 To cut a release:
 
-1. Bump `version:` in `config.yaml` (semver — minor for features/visual
-   changes, patch for fixes).
+1. Bump `version:` in `camera_event_report/config.yaml` (semver — minor for
+   features/visual changes, patch for fixes).
 2. Add a matching `## [x.y.z] - YYYY-MM-DD` entry at the top of `CHANGELOG.md`.
 3. Commit, then merge to `main` and push (only when the user asks).
 

@@ -2,6 +2,15 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.4.1] - 2026-07-15
+
+### Fixed
+- **Add-on Store repository structure** — adding the GitHub repo as a custom
+  repository failed with *"is not a valid add-on repository."* The add-on files
+  now live in a `camera_event_report/` subdirectory with a `repository.yaml` at
+  the repo root, matching Home Assistant's required repository layout so the
+  store accepts the URL.
+
 ## [1.4.0] - 2026-06-30
 
 ### Changed

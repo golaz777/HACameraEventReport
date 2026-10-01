@@ -63,7 +63,12 @@ To cut a release:
 
 1. Bump `version:` in `camera_event_report/config.yaml` (semver — minor for
    features/visual changes, patch for fixes).
-2. Add a matching `## [x.y.z] - YYYY-MM-DD` entry at the top of `CHANGELOG.md`.
+2. Add a matching `## [x.y.z] - YYYY-MM-DD` entry at the top of
+   **`camera_event_report/CHANGELOG.md`**. It must live in the add-on
+   directory, next to `config.yaml` — that is where the Supervisor reads it
+   from, and it is what Home Assistant shows for the add-on. A changelog at
+   the repo root is invisible to HA; the root `CHANGELOG.md` is only a pointer
+   stub.
 3. Commit, then merge to `main` and push (only when the user asks).
 
 ### Updating the add-on in Home Assistant

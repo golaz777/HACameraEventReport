@@ -14,6 +14,7 @@
         .report-meta { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
         .report-file { font-size: 0.875rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
         .report-count { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; background: var(--surface2); border-radius: var(--radius-xs); padding: 0.1rem 0.4rem; }
+        .report-human { font-size: 0.78rem; font-weight: 700; white-space: nowrap; color: #b42318; background: #fee2e2; border: 1px solid #fecaca; border-radius: 999px; padding: 0.1rem 0.5rem; }
         .actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
         .view-btn { padding: 0.3rem 0.8rem; font-size: 0.82rem; font-weight: 500; text-decoration: none; background: var(--accent-grad); color: #fff; border-radius: var(--radius-xs); border: none; cursor: pointer; box-shadow: var(--shadow-sm); transition: filter var(--transition); }
         .view-btn:hover { filter: brightness(1.1); }
@@ -94,6 +95,9 @@
                         <span class="report-file">{{ r.filename }}</span>
                         {% if r.event_count is not none %}
                         <span class="report-count">{{ r.event_count }} event{{ "s" if r.event_count != 1 else "" }}</span>
+                        {% endif %}
+                        {% if r.human_count %}
+                        <span class="report-human" title="a person was detected in this session">{{ r.human_count }} human{{ "s" if r.human_count != 1 else "" }}</span>
                         {% endif %}
                     </div>
                     <div class="actions">

@@ -280,3 +280,61 @@ def test_load_config_camera_name_explicit_overrides_default(tmp_path):
     config = load_config(str(options_file))
 
     assert config.cameras[0].name == "My Cam"
+
+
+def _base_options(**extra):
+    options = {
+        "cameras": [],
+        "report": {
+            "email": {
+                "enabled": False,
+                "smtp_host": "",
+                "smtp_port": 587,
+                "smtp_user": "",
+                "smtp_password": "",
+                "recipient": "",
+                "sender": "",
+            }
+        },
+        "notification": {"ha_persistent": False},
+    }
+    options.update(extra)
+    return options
+
+
+def _load(tmp_path, options):
+    options_file = tmp_path / "options.json"
+    options_file.write_text(json.dumps(options))
+    return load_config(str(options_file))
+
+
+def test_detection_defaults_when_key_absent(tmp_path):
+    """Upgrades from versions without detection must get working defaults."""
+    config = _load(tmp_path, _base_options())
+
+    assert config.detection.enabled is True
+    assert config.detection.confidence == 0.4
+    assert config.detection.model_path == "/app/models/ssd_mobilenet_v1_12.onnx"
+
+
+def test_detection_explicit_values_honoured(tmp_path):
+    config = _load(
+        tmp_path,
+        _base_options(detection={"enabled": False, "confidence": 0.75}),
+    )
+
+    assert config.detection.enabled is False
+    assert config.detection.confidence == 0.75
+
+
+def test_detection_confidence_coerced_to_float(tmp_path):
+    config = _load(tmp_path, _base_options(detection={"confidence": 1}))
+
+    assert isinstance(config.detection.confidence, float)
+    assert config.detection.confidence == 1.0
+
+
+def test_detection_blank_model_path_falls_back_to_default(tmp_path):
+    config = _load(tmp_path, _base_options(detection={"model_path": ""}))
+
+    assert config.detection.model_path == "/app/models/ssd_mobilenet_v1_12.onnx"

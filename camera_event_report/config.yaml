@@ -35,6 +35,9 @@ options:
   retention_days: 30
   monitoring:
     toggle_entity: ""
+  detection:
+    enabled: true
+    confidence: 0.4
 schema:
   cameras:
     - entity_id: str
@@ -56,3 +59,6 @@ schema:
   retention_days: int?
   monitoring:
     toggle_entity: str
+  detection:
+    enabled: bool
+    confidence: float

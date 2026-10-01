@@ -1,0 +1,40 @@
+# Third-party components
+
+## SSD MobileNet V1 object detection model
+
+`camera_event_report/models/ssd_mobilenet_v1_12.onnx`
+
+| | |
+|---|---|
+| Upstream | [ONNX Model Zoo](https://github.com/onnx/models) — `validated/vision/object_detection_segmentation/ssd-mobilenetv1` |
+| Source URL | https://github.com/onnx/models/raw/main/validated/vision/object_detection_segmentation/ssd-mobilenetv1/model/ssd_mobilenet_v1_12.onnx |
+| SHA256 | `b8fba5e404077d4048d27fcd1667e85e27e192eb9bf51e696c46a3acd7d21058` |
+| Size | 28.1 MB |
+| Training data | MS COCO 2017 |
+| Licence | **MIT** (per the model card; the ONNX Model Zoo repository is Apache-2.0) |
+
+The model's licence is compatible with this repository's MIT licence, so the
+weights may be redistributed with the add-on.
+
+### Interface
+
+Taken from the graph itself rather than documentation, since the exported names
+differ from the model card:
+
+- Input: one `uint8` tensor, NHWC `(1, height, width, 3)`, dynamic height and
+  width. Raw pixels — the graph does its own resize and normalisation.
+- Outputs, which must be requested **by name** (positional order is not
+  boxes/classes/scores/num): `detection_boxes`, `detection_classes`,
+  `detection_scores`, `num_detections`.
+- Class ids follow the TensorFlow Object Detection API convention and are
+  **1-based**: person is class `1`.
+
+A quantised `ssd_mobilenet_v1_12-int8.onnx` (9.2 MB) exists upstream. It scores
+marginally higher on well-lit frames but degrades further on dark, low-contrast
+ones — the conditions this add-on most often works in — so the fp32 model is
+bundled instead.
+
+## onnxruntime
+
+Microsoft ONNX Runtime, MIT licence. Installed at image build time; optional —
+see the note in `camera_event_report/Dockerfile`.

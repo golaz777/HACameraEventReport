@@ -27,6 +27,13 @@ class MonitoringConfig:
 
 
 @dataclass
+class DetectionConfig:
+    enabled: bool = True
+    confidence: float = 0.4
+    model_path: str = "/app/models/ssd_mobilenet_v1_12.onnx"
+
+
+@dataclass
 class Config:
     cameras: list[CameraConfig]
     email: EmailConfig
@@ -37,6 +44,7 @@ class Config:
     monitoring: MonitoringConfig = field(
         default_factory=lambda: MonitoringConfig(toggle_entity="")
     )
+    detection: DetectionConfig = field(default_factory=DetectionConfig)
 
 
 def load_config(path: str = "/data/options.json") -> Config:
@@ -82,6 +90,13 @@ def load_config(path: str = "/data/options.json") -> Config:
         toggle_entity=monitoring_data.get("toggle_entity", "")
     )
 
+    detection_data = data.get("detection", {})
+    detection = DetectionConfig(
+        enabled=detection_data.get("enabled", True),
+        confidence=float(detection_data.get("confidence", 0.4)),
+        model_path=detection_data.get("model_path") or "/app/models/ssd_mobilenet_v1_12.onnx",
+    )
+
     _retention_sentinel = object()
     raw_retention = data.get("retention_days", _retention_sentinel)
     if raw_retention is _retention_sentinel:
@@ -99,4 +114,5 @@ def load_config(path: str = "/data/options.json") -> Config:
         media_path=data.get("media_path", "/data/camera_events"),
         retention_days=retention_days,
         monitoring=monitoring,
+        detection=detection,
     )

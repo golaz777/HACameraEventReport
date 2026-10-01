@@ -26,6 +26,8 @@ class _RichEvent:
         self.camera_name = event.camera_name
         self.camera_entity = event.camera_entity
         self.screenshot_b64 = self._load_b64(event.screenshot_path)
+        self.human_detected = event.human_detected
+        self.human_confidence = event.human_confidence
 
     @staticmethod
     def _load_b64(path: str | None) -> str | None:
@@ -52,6 +54,8 @@ class ReportEngine:
         events: list[MotionEvent],
         sunset_time: str,
         sunrise_time: str,
+        human_count: int = 0,
+        detection_enabled: bool = False,
     ) -> str:
         template = self._env.get_template("report.html.j2")
         return template.render(
@@ -59,6 +63,8 @@ class ReportEngine:
             events=[_RichEvent(e) for e in events],
             sunset_time=sunset_time,
             sunrise_time=sunrise_time,
+            human_count=human_count,
+            detection_enabled=detection_enabled,
         )
 
     def save(self, html: str, night: date, base_path: str, ts: datetime | None = None) -> str:
@@ -74,23 +80,41 @@ class ReportEngine:
         return str(report_path)
 
 
-_EVENT_COUNT_RE = re.compile(r"<strong>Total events:</strong>\s*(\d+)")
+# The summary block wraps values in <span>, which the original pattern missed —
+# every saved report parsed as an unknown count. The wrapper is optional here so
+# reports saved by any version still parse.
+_EVENT_COUNT_RE = re.compile(r"<strong>Total events:</strong>\s*(?:<span>)?\s*(\d+)")
+_HUMAN_COUNT_RE = re.compile(
+    r"<strong>Humans detected:</strong>\s*<span[^>]*>\s*(\d+)"
+)
+
+
+def _extract_counts(path: Path) -> tuple[int | None, int | None]:
+    """Recover (event_count, human_count) from a saved report's summary block."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None, None
+    ev = _EVENT_COUNT_RE.search(text)
+    hu = _HUMAN_COUNT_RE.search(text)
+    return (
+        int(ev.group(1)) if ev else None,
+        int(hu.group(1)) if hu else None,
+    )
 
 
 def _extract_event_count(path: Path) -> int | None:
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        m = _EVENT_COUNT_RE.search(text)
-        return int(m.group(1)) if m else None
-    except Exception:
-        return None
+    return _extract_counts(path)[0]
 
 
 def list_reports(base_path: str) -> list[dict]:
     """Return all report HTML files under base_path, newest first.
 
     Each entry: {"date": "YYYY-MM-DD", "filename": "report_HH-MM-SS.html",
-                 "event_count": int | None}
+                 "event_count": int | None, "human_count": int | None}
+
+    human_count is None for reports written before human detection existed, or
+    when detection was disabled for that session.
     """
     base = Path(base_path)
     if not base.exists():
@@ -100,9 +124,11 @@ def list_reports(base_path: str) -> list[dict]:
         if not day_dir.is_dir():
             continue
         for f in sorted(day_dir.glob("report*.html"), reverse=True):
+            event_count, human_count = _extract_counts(f)
             reports.append({
                 "date": day_dir.name,
                 "filename": f.name,
-                "event_count": _extract_event_count(f),
+                "event_count": event_count,
+                "human_count": human_count,
             })
     return reports

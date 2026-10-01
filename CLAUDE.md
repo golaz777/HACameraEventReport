@@ -18,6 +18,27 @@ context. `tests/` and `pyproject.toml` stay at the repo root; pytest imports
 `src` via `pythonpath = ["camera_event_report"]`. Do not move the add-on back to
 the root — the store requires this subdirectory layout.
 
+## Human detection
+
+`src/detector.py` analyses a completed session's snapshots with a bundled SSD
+MobileNet V1 ONNX model (`camera_event_report/models/ssd_mobilenet_v1_12.onnx`,
+copied into the image by the Dockerfile). Key constraints:
+
+- `onnxruntime` is an **optional** dependency — it has no wheels for the
+  `armhf`/`armv7`/`i386` architectures declared in `config.yaml`, so the
+  Dockerfile installs it in a non-fatal step and `HumanDetector` degrades to
+  `available = False` on ImportError. Never make it a hard requirement in
+  `requirements.txt`.
+- `MotionEvent.human_detected` is **tri-state**: `None` means not analysed,
+  `False` means analysed with nobody there. Do not collapse them.
+- The model takes **raw uint8 NHWC** pixels (it resizes internally — do not
+  normalise or letterbox) and its outputs must be requested **by name**;
+  positional order is not boxes/classes/scores/num. COCO class ids are
+  1-based, so person is `1`. See `NOTICE` for the full interface.
+- `report.py`'s `_EVENT_COUNT_RE` / `_HUMAN_COUNT_RE` parse counts back out of
+  saved report HTML. Changing the summary block in `report.html.j2` breaks the
+  Reports page; there are regression tests for this in `tests/test_report.py`.
+
 ## Web UI
 
 - All page CSS is **inlined** in the templates (Home Assistant ingress-safe —
@@ -61,6 +82,9 @@ the cache is refreshed. After pushing:
 
 ## Conventions
 
+- Run tests with `python -m pytest --force-enable-socket`. A globally installed
+  `pytest_homeassistant_custom_component` plugin blocks sockets and makes the
+  aiohttp tests in `test_web.py` fail spuriously without that flag.
 - Conventional Commits (`feat:`, `fix:`, `chore(release):`, `refactor:`, …).
 - On the default branch, create a feature/release branch before committing.
 - Commit or push only when explicitly asked.

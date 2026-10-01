@@ -71,15 +71,25 @@ class Notifier:
         self._ha = ha_client
 
     async def send_ha_notification(
-        self, night: date, event_count: int, report_path: str
+        self, night: date, event_count: int, report_path: str, human_count: int = 0
     ) -> None:
         if not self._config.ha_persistent:
             return
-        title = f"[HA] Motion Report – {night.isoformat()} ({event_count} events)"
-        message = (
-            f"Motion report ready: {event_count} event(s) detected. "
-            f"Report saved to {report_path}"
-        )
+        if human_count:
+            title = (
+                f"[HA] ⚠️ Human detected – {night.isoformat()} "
+                f"({human_count} of {event_count} snapshots)"
+            )
+            message = (
+                f"A person was detected in {human_count} of {event_count} "
+                f"snapshot(s). Report saved to {report_path}"
+            )
+        else:
+            title = f"[HA] Motion Report – {night.isoformat()} ({event_count} events)"
+            message = (
+                f"Motion report ready: {event_count} event(s) detected. "
+                f"Report saved to {report_path}"
+            )
         await self._ha.send_notification(title, message)
         logger.info("HA persistent notification sent")
 

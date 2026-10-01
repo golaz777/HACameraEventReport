@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from src.main import App
 from src.presence_guard import PresenceGuard
@@ -260,3 +260,172 @@ async def test_on_home_with_no_away_start_does_not_crash():
         await app._on_home()   # must not raise
 
     mock_notifier.send_ha_notification.assert_called_once()
+
+
+def _detection_app(events, detector=None):
+    """An App wired just enough to exercise _on_home's detection path."""
+    app = App()
+    app.config = MagicMock()
+    app.config.media_path = "/media/camera_events"
+    app._away_start = datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)
+
+    app.store = MagicMock()
+    app.store.read = MagicMock(return_value=events)
+    app.store.update_detections = MagicMock()
+    app.notifier = AsyncMock()
+    app.detector = detector
+    return app
+
+
+def _snap_event(ts, entity="camera.front"):
+    from src.store import MotionEvent
+
+    return MotionEvent(
+        timestamp=ts,
+        camera_name=entity.split(".")[-1],
+        camera_entity=entity,
+        screenshot_path="/snap.jpg",
+    )
+
+
+def _patched_engine():
+    engine = MagicMock()
+    engine.generate = MagicMock(return_value="<html>")
+    engine.save = MagicMock(return_value="/media/camera_events/report.html")
+    return engine
+
+
+async def test_on_home_analyses_snapshots_and_reports_humans():
+    ts = datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc)
+    event = _snap_event(ts)
+
+    detector = AsyncMock()
+    detector.available = True
+
+    async def analyze(events):
+        events[0].human_detected = True
+        events[0].human_confidence = 0.93
+        return 1
+
+    detector.analyze = AsyncMock(side_effect=analyze)
+    app = _detection_app([event], detector)
+
+    engine = _patched_engine()
+    with patch("src.main.ReportEngine", return_value=engine):
+        await app._on_home()
+
+    detector.analyze.assert_awaited_once()
+    assert engine.generate.call_args.kwargs["human_count"] == 1
+    assert engine.generate.call_args.kwargs["detection_enabled"] is True
+    assert app.notifier.send_ha_notification.call_args.kwargs["human_count"] == 1
+    app.store.update_detections.assert_called_once()
+
+
+async def test_on_home_persists_verdicts_per_day():
+    """An away window can span days, and each day has its own event log."""
+    day1 = datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)
+    day2 = datetime(2026, 10, 2, 1, 0, tzinfo=timezone.utc)
+    events = [_snap_event(day1), _snap_event(day2)]
+
+    detector = AsyncMock()
+    detector.available = True
+    detector.analyze = AsyncMock(return_value=0)
+    app = _detection_app(events, detector)
+    # store.read is called once per day in the window; return everything once.
+    app.store.read = MagicMock(side_effect=[events, []])
+
+    with patch("src.main.ReportEngine", return_value=_patched_engine()):
+        await app._on_home()
+
+    persisted_days = [c.args[0] for c in app.store.update_detections.call_args_list]
+    assert sorted(persisted_days) == [date(2026, 10, 1), date(2026, 10, 2)]
+
+
+async def test_on_home_skips_detection_when_disabled():
+    app = _detection_app([_snap_event(datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc))])
+
+    engine = _patched_engine()
+    with patch("src.main.ReportEngine", return_value=engine):
+        await app._on_home()
+
+    assert engine.generate.call_args.kwargs["human_count"] == 0
+    assert engine.generate.call_args.kwargs["detection_enabled"] is False
+    app.store.update_detections.assert_not_called()
+    app.notifier.send_ha_notification.assert_awaited_once()
+
+
+async def test_on_home_still_reports_when_detection_raises():
+    """A detector failure must never cost us the report."""
+    detector = AsyncMock()
+    detector.available = True
+    detector.analyze = AsyncMock(side_effect=RuntimeError("onnx exploded"))
+    app = _detection_app(
+        [_snap_event(datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc))], detector
+    )
+
+    engine = _patched_engine()
+    with patch("src.main.ReportEngine", return_value=engine):
+        await app._on_home()   # must not raise
+
+    assert engine.generate.call_args.kwargs["human_count"] == 0
+    app.notifier.send_ha_notification.assert_awaited_once()
+    app.store.update_detections.assert_not_called()
+
+
+async def test_on_home_reports_when_persisting_verdicts_fails():
+    """A read-only media volume must not block the report either."""
+    ts = datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc)
+    detector = AsyncMock()
+    detector.available = True
+
+    async def analyze(events):
+        events[0].human_detected = True
+        return 1
+
+    detector.analyze = AsyncMock(side_effect=analyze)
+    app = _detection_app([_snap_event(ts)], detector)
+    app.store.update_detections = MagicMock(side_effect=OSError("read-only fs"))
+
+    engine = _patched_engine()
+    with patch("src.main.ReportEngine", return_value=engine):
+        await app._on_home()   # must not raise
+
+    assert engine.generate.call_args.kwargs["human_count"] == 1
+
+
+async def test_setup_creates_detector_when_enabled():
+    mock_config = MagicMock()
+    mock_config.cameras = []
+    mock_config.media_path = "/media/camera_events"
+    mock_config.retention_days = None
+    mock_config.monitoring.toggle_entity = ""
+    mock_config.detection.enabled = True
+    mock_config.detection.model_path = "/app/models/ssd_mobilenet_v1_12.onnx"
+    mock_config.detection.confidence = 0.4
+
+    with patch("src.main.HAClient", return_value=AsyncMock()), \
+         patch("src.main.load_config", return_value=mock_config), \
+         patch("src.main.WebServer", return_value=AsyncMock()), \
+         patch("src.main.EventStore"):
+        app = App()
+        await app.setup()
+
+    assert app.detector is not None
+
+
+async def test_setup_skips_detector_when_disabled():
+    mock_config = MagicMock()
+    mock_config.cameras = []
+    mock_config.media_path = "/media/camera_events"
+    mock_config.retention_days = None
+    mock_config.monitoring.toggle_entity = ""
+    mock_config.detection.enabled = False
+
+    with patch("src.main.HAClient", return_value=AsyncMock()), \
+         patch("src.main.load_config", return_value=mock_config), \
+         patch("src.main.WebServer", return_value=AsyncMock()), \
+         patch("src.main.EventStore"):
+        app = App()
+        await app.setup()
+
+    assert app.detector is None

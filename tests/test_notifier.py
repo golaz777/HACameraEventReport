@@ -182,3 +182,30 @@ async def test_send_email_failure_does_not_raise(config):
             event_count=3,
             html_content="<html/>",
         )
+
+
+async def test_ha_notification_announces_human_detection(config):
+    mock_ha = AsyncMock()
+    notifier = Notifier(config, mock_ha)
+
+    await notifier.send_ha_notification(
+        date(2026, 10, 1), 8, "/media/r.html", human_count=3
+    )
+
+    title, message = mock_ha.send_notification.call_args[0]
+    assert "Human detected" in title
+    assert "3 of 8" in title
+    assert "3 of 8 snapshot(s)" in message
+    assert "/media/r.html" in message
+
+
+async def test_ha_notification_unchanged_when_no_human(config):
+    mock_ha = AsyncMock()
+    notifier = Notifier(config, mock_ha)
+
+    await notifier.send_ha_notification(date(2026, 10, 1), 8, "/media/r.html")
+
+    title, message = mock_ha.send_notification.call_args[0]
+    assert "Motion Report" in title
+    assert "Human" not in title
+    assert "8 event(s) detected" in message

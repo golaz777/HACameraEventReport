@@ -20,3 +20,6 @@ configuration:
   monitoring:
     name: Away Monitoring
     description: Toggle entity to start/stop monitoring (e.g. input_boolean.away_mode)
+  detection:
+    name: Human Detection
+    description: Analyse snapshots for people after monitoring ends. Confidence is the minimum score (0-1) to count as a person (default 0.4)

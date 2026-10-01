@@ -8,6 +8,7 @@ _CET = ZoneInfo("Europe/Paris")
 
 from src.broadcaster import EventBroadcaster
 from src.config import load_config, Config
+from src.detector import HumanDetector
 from src.ha_client import HAClient
 from src.presence_guard import PresenceGuard
 from src.event_handler import EventHandler
@@ -31,6 +32,7 @@ class App:
         self.store: EventStore | None = None
         self.handler: EventHandler | None = None
         self.notifier: Notifier | None = None
+        self.detector: HumanDetector | None = None
         self._away_start: datetime | None = None
         self._listen_task: asyncio.Task | None = None
         self._web_server: WebServer | None = None
@@ -58,6 +60,11 @@ class App:
             self.config, self.ha, self.store, self.presence_guard, self._broadcaster
         )
         self.notifier = Notifier(self.config, self.ha)
+
+        if self.config.detection.enabled:
+            self.detector = HumanDetector(
+                self.config.detection.model_path, self.config.detection.confidence
+            )
 
         # Seed and wire PresenceGuard
         if self.presence_guard:
@@ -110,18 +117,52 @@ class App:
         # Keep only events that occurred during the away window
         events = [e for e in events if e.timestamp >= start]
 
+        human_count = await self._detect_humans(events)
+
         engine = ReportEngine()
         html = engine.generate(
             night=end_date,
             events=events,
             sunset_time=start.astimezone(_CET).strftime("%H:%M"),
             sunrise_time=now_cet.strftime("%H:%M"),
+            human_count=human_count,
+            detection_enabled=self.detector is not None and self.detector.available,
         )
         report_path = engine.save(html, end_date, self.config.media_path, ts=now)
 
-        await self.notifier.send_ha_notification(end_date, len(events), report_path)
+        await self.notifier.send_ha_notification(
+            end_date, len(events), report_path, human_count=human_count
+        )
         await self.notifier.send_email(end_date, len(events), html)
-        logger.info("Away report sent (%d events)", len(events))
+        logger.info(
+            "Away report sent (%d events, %d with humans)", len(events), human_count
+        )
+
+    async def _detect_humans(self, events: list) -> int:
+        """Analyse the session's snapshots and persist the verdicts.
+
+        Returns the number of events containing a person, or 0 when detection
+        is disabled or unavailable. Failures here are swallowed: a report
+        without verdicts beats no report at all.
+        """
+        if not self.detector or not events:
+            return 0
+        try:
+            human_count = await self.detector.analyze(events)
+        except Exception:
+            logger.exception("Human detection failed — continuing without verdicts")
+            return 0
+
+        # The away window can span days, and each day has its own event log.
+        by_day: dict[date, list] = {}
+        for event in events:
+            by_day.setdefault(event.timestamp.date(), []).append(event)
+        for day, day_events in by_day.items():
+            try:
+                self.store.update_detections(day, day_events)
+            except Exception:
+                logger.exception("Could not persist detection verdicts for %s", day)
+        return human_count
 
     async def run(self) -> None:
         await self.setup()

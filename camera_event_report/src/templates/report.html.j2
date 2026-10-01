@@ -43,6 +43,11 @@
     .img-link:hover img { opacity: 0.82; }
     .no-snap { color: var(--text-muted); font-style: italic; font-size: 0.85rem; }
     .no-events { color: var(--text-muted); font-style: italic; padding: 2rem 0; }
+    .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+    .badge-human { background: #fee2e2; color: #b42318; border: 1px solid #fecaca; }
+    .badge-clear { background: #ecfdf5; color: #047857; border: 1px solid #d1fae5; }
+    .badge-unknown { color: var(--text-muted); font-size: 0.85rem; }
+    .summary .alert { color: #b42318; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -51,18 +56,32 @@
     <strong>Date:</strong> <span>{{ night }}</span><br>
     <strong>Window:</strong> <span>{{ sunset_time }} → {{ sunrise_time }}</span><br>
     <strong>Total events:</strong> <span>{{ events|length }}</span>
+    {% if detection_enabled %}<br>
+    <strong>Humans detected:</strong> <span{% if human_count %} class="alert"{% endif %}>{{ human_count }}</span> <strong>of {{ events|length }} snapshot(s)</strong>
+    {% endif %}
   </div>
 
   {% if events %}
   <table>
     <thead>
-      <tr><th>Time (CET)</th><th>Camera</th><th>Screenshot</th></tr>
+      <tr><th>Time (CET)</th><th>Camera</th>{% if detection_enabled %}<th>Person</th>{% endif %}<th>Screenshot</th></tr>
     </thead>
     <tbody>
       {% for event in events %}
       <tr>
         <td>{{ event.timestamp.strftime("%H:%M:%S") }}</td>
         <td>{{ event.camera_name }}</td>
+        {% if detection_enabled %}
+        <td>
+          {% if event.human_detected is none %}
+          <span class="badge-unknown" title="snapshot was not analysed">—</span>
+          {% elif event.human_detected %}
+          <span class="badge badge-human" title="confidence {{ "%.2f"|format(event.human_confidence or 0) }}">Human</span>
+          {% else %}
+          <span class="badge badge-clear" title="confidence {{ "%.2f"|format(event.human_confidence or 0) }}">Clear</span>
+          {% endif %}
+        </td>
+        {% endif %}
         <td>
           {% if event.screenshot_b64 %}
           <a class="img-link" href="#" data-caption="{{ event.timestamp.strftime('%H:%M:%S') }} · {{ event.camera_name }}" onclick="openLightbox(this);return false;">

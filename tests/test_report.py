@@ -151,3 +151,118 @@ def test_list_reports_ignores_non_report_files(tmp_path):
 
     assert len(reports) == 1
     assert reports[0]["filename"] == "report_20-00-00.html"
+
+
+def _analysed(detected, confidence=0.9):
+    return MotionEvent(
+        timestamp=datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc),
+        camera_name="Front Door",
+        camera_entity="camera.front_door",
+        screenshot_path=None,
+        human_detected=detected,
+        human_confidence=confidence,
+    )
+
+
+def test_report_shows_human_badge_for_detection():
+    html = ReportEngine().generate(
+        night=date(2026, 10, 1),
+        events=[_analysed(True, 0.88)],
+        sunset_time="20:00",
+        sunrise_time="07:00",
+        human_count=1,
+        detection_enabled=True,
+    )
+
+    assert "<th>Person</th>" in html
+    assert "badge-human" in html
+    assert ">Human<" in html
+    assert "0.88" in html
+
+
+def test_report_shows_clear_badge_when_no_person():
+    html = ReportEngine().generate(
+        night=date(2026, 10, 1),
+        events=[_analysed(False, 0.03)],
+        sunset_time="20:00",
+        sunrise_time="07:00",
+        human_count=0,
+        detection_enabled=True,
+    )
+
+    assert ">Clear<" in html
+    assert ">Human<" not in html
+
+
+def test_report_distinguishes_unanalysed_from_clear():
+    """A frame never analysed must not be reported as free of people."""
+    html = ReportEngine().generate(
+        night=date(2026, 10, 1),
+        events=[_analysed(None, None)],
+        sunset_time="20:00",
+        sunrise_time="07:00",
+        detection_enabled=True,
+    )
+
+    assert "badge-unknown" in html
+    assert ">Clear<" not in html
+    assert ">Human<" not in html
+
+
+def test_report_summarises_human_count():
+    html = ReportEngine().generate(
+        night=date(2026, 10, 1),
+        events=[_analysed(True), _analysed(False, 0.1)],
+        sunset_time="20:00",
+        sunrise_time="07:00",
+        human_count=1,
+        detection_enabled=True,
+    )
+
+    assert "Humans detected:" in html
+    assert "of 2 snapshot(s)" in html
+
+
+def test_report_omits_detection_markup_when_disabled(two_events):
+    html = ReportEngine().generate(
+        night=date(2026, 10, 1),
+        events=two_events,
+        sunset_time="20:00",
+        sunrise_time="07:00",
+    )
+
+    assert "<th>Person</th>" not in html
+    assert "Humans detected:" not in html
+
+
+def test_event_count_is_recoverable_from_saved_report(tmp_path, two_events):
+    """Regression: the summary block is parsed back by the Reports page."""
+    engine = ReportEngine()
+    html = engine.generate(
+        night=date(2026, 10, 1),
+        events=two_events,
+        sunset_time="20:00",
+        sunrise_time="07:00",
+        human_count=1,
+        detection_enabled=True,
+    )
+    engine.save(html, date(2026, 10, 1), str(tmp_path))
+
+    report = list_reports(str(tmp_path))[0]
+    assert report["event_count"] == 2
+    assert report["human_count"] == 1
+
+
+def test_human_count_is_none_for_reports_without_detection(tmp_path, two_events):
+    engine = ReportEngine()
+    html = engine.generate(
+        night=date(2026, 10, 1),
+        events=two_events,
+        sunset_time="20:00",
+        sunrise_time="07:00",
+    )
+    engine.save(html, date(2026, 10, 1), str(tmp_path))
+
+    report = list_reports(str(tmp_path))[0]
+    assert report["event_count"] == 2
+    assert report["human_count"] is None

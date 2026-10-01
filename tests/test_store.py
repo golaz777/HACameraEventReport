@@ -200,3 +200,131 @@ def test_read_range_empty(tmp_path):
     result = store.read_range(date(2026, 4, 10), date(2026, 4, 12))
     assert len(result) == 3
     assert all(len(events) == 0 for events in result.values())
+
+
+def _event(ts, entity="camera.front", path="/snap.jpg", detected=None, conf=None):
+    return MotionEvent(
+        timestamp=ts,
+        camera_name=entity.split(".")[-1],
+        camera_entity=entity,
+        screenshot_path=path,
+        human_detected=detected,
+        human_confidence=conf,
+    )
+
+
+def test_detection_verdicts_round_trip(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    ts = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+
+    store.append(night, _event(ts, detected=True, conf=0.91))
+    store.append(night, _event(ts.replace(minute=5), detected=False, conf=0.02))
+
+    first, second = store.read(night)
+    assert (first.human_detected, first.human_confidence) == (True, 0.91)
+    assert (second.human_detected, second.human_confidence) == (False, 0.02)
+
+
+def test_unanalysed_event_round_trips_as_none(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    store.append(night, _event(datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)))
+
+    event = store.read(night)[0]
+    assert event.human_detected is None
+    assert event.human_confidence is None
+
+
+def test_read_accepts_logs_written_before_detection_existed(tmp_path):
+    """Logs from older versions have no detection keys and must still load."""
+    night = date(2026, 10, 1)
+    day_dir = tmp_path / night.isoformat()
+    day_dir.mkdir()
+    (day_dir / "events.json").write_text(
+        '{"timestamp": "2026-10-01T22:00:00+00:00", "camera_name": "Front Door", '
+        '"camera_entity": "camera.front_door", "screenshot_path": "/a.jpg"}\n',
+        encoding="utf-8",
+    )
+
+    events = EventStore(base_path=str(tmp_path)).read(night)
+
+    assert len(events) == 1
+    assert events[0].camera_name == "Front Door"
+    assert events[0].human_detected is None
+
+
+def test_update_detections_persists_verdicts(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    t1 = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 10, 1, 22, 30, tzinfo=timezone.utc)
+    store.append(night, _event(t1, entity="camera.front"))
+    store.append(night, _event(t2, entity="camera.back"))
+
+    analysed = [
+        _event(t1, entity="camera.front", detected=True, conf=0.88),
+        _event(t2, entity="camera.back", detected=False, conf=0.01),
+    ]
+    store.update_detections(night, analysed)
+
+    front, back = store.read(night)
+    assert (front.human_detected, front.human_confidence) == (True, 0.88)
+    assert (back.human_detected, back.human_confidence) == (False, 0.01)
+
+
+def test_update_detections_leaves_unmatched_records_untouched(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    t1 = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc)
+    store.append(night, _event(t1, entity="camera.front"))
+    store.append(night, _event(t2, entity="camera.back"))
+
+    store.update_detections(
+        night, [_event(t1, entity="camera.front", detected=True, conf=0.7)]
+    )
+
+    front, back = store.read(night)
+    assert front.human_detected is True
+    assert back.human_detected is None
+    assert back.camera_entity == "camera.back"
+
+
+def test_update_detections_matches_on_camera_not_just_time(tmp_path):
+    """Two cameras can fire in the same second — verdicts must not cross over."""
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    ts = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+    store.append(night, _event(ts, entity="camera.front"))
+    store.append(night, _event(ts, entity="camera.back"))
+
+    store.update_detections(
+        night, [_event(ts, entity="camera.back", detected=True, conf=0.9)]
+    )
+
+    by_entity = {e.camera_entity: e for e in store.read(night)}
+    assert by_entity["camera.back"].human_detected is True
+    assert by_entity["camera.front"].human_detected is None
+
+
+def test_update_detections_is_noop_without_log(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    ts = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+
+    store.update_detections(night, [_event(ts, detected=True, conf=0.5)])
+
+    assert store.read(night) == []
+
+
+def test_update_detections_leaves_no_temp_file_behind(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    night = date(2026, 10, 1)
+    ts = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+    store.append(night, _event(ts))
+
+    store.update_detections(night, [_event(ts, detected=True, conf=0.6)])
+
+    day_dir = tmp_path / night.isoformat()
+    assert sorted(p.name for p in day_dir.iterdir()) == ["events.json"]

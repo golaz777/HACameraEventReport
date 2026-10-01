@@ -2,6 +2,25 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.6.0] - 2026-10-01
+
+### Added
+- **Home Assistant entities** — `binary_sensor.camera_event_report_monitoring`,
+  `sensor.camera_event_report_session_events`,
+  `sensor.camera_event_report_last_motion` and
+  `sensor.camera_event_report_last_report`.
+- **Home Assistant events** — `camera_event_report_motion` and
+  `camera_event_report_report_ready`, for your own automations.
+- **Export** — download any report as a ZIP with the original snapshots,
+  `events.csv`, `events.json` and `SHA256SUMS`.
+- New `homeassistant` options (`publish_entities`, `fire_events`), both on by
+  default.
+
+### Fixed
+- **Restarting the add-on during an away session no longer truncates the
+  report.** The session start is now saved in `<media_path>/session.json` and
+  restored on startup.
+
 ## [1.5.1] - 2026-10-01
 
 ### Fixed

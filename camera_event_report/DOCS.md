@@ -45,6 +45,8 @@ what triggers analysis and the report.
 | `detection.enabled` | bool | `true` | Analyse snapshots for people after monitoring ends |
 | `detection.confidence` | float | `0.4` | Minimum score (0–1) for a detection to count as a person |
 | `notification.ha_persistent` | bool | `true` | Create a Home Assistant notification when you return |
+| `homeassistant.publish_entities` | bool | `true` | Publish the add-on's state as Home Assistant entities — see [Home Assistant entities and events](#home-assistant-entities-and-events) |
+| `homeassistant.fire_events` | bool | `true` | Fire `camera_event_report_*` events on the Home Assistant event bus |
 | `report.email.enabled` | bool | `false` | Also email the report |
 | `report.email.smtp_host` | string | `""` | SMTP server hostname |
 | `report.email.smtp_port` | int | `587` | SMTP port |
@@ -83,6 +85,10 @@ detection:
 
 notification:
   ha_persistent: true
+
+homeassistant:
+  publish_entities: true
+  fire_events: true
 
 event_cooldown_seconds: 30
 media_path: /data/camera_events
@@ -146,6 +152,59 @@ else, including snapshots and reports, works normally.
 
 On `aarch64` and `amd64` you will see `Human detection ready` in the log at
 startup. That line is the quickest confirmation it loaded.
+
+## Home Assistant entities and events
+
+The add-on publishes its state so you can build your own automations.
+
+| Entity | State | Attributes |
+|---|---|---|
+| `binary_sensor.camera_event_report_monitoring` | `on` while away monitoring runs | `since` |
+| `sensor.camera_event_report_session_events` | motion events in the current or last session | `per_camera` |
+| `sensor.camera_event_report_last_motion` | time of the last motion event | `camera_name`, `camera_entity`, `snapshot_path` |
+| `sensor.camera_event_report_last_report` | time of the last report | `event_count`, `human_count`, `detection_enabled`, `report_path` |
+
+| Event | Fired | Data |
+|---|---|---|
+| `camera_event_report_motion` | for every recorded motion event | `camera_name`, `camera_entity`, `timestamp`, `snapshot_path` |
+| `camera_event_report_report_ready` | when a report has been generated | `date`, `report_path`, `event_count`, `human_count`, `detection_enabled` |
+
+These entities are created by the add-on, not by an integration: they cannot
+be renamed or assigned to an area in the UI, and they briefly disappear while
+Home Assistant restarts (the add-on re-publishes them as soon as it reconnects).
+
+People are detected when you get home, not live — so react to
+`report_ready`, not to motion, if you only care about people:
+
+```yaml
+automation:
+  - alias: "Someone was here while we were away"
+    trigger:
+      - platform: event
+        event_type: camera_event_report_report_ready
+    condition:
+      - "{{ trigger.event.data.human_count > 0 }}"
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          message: >
+            {{ trigger.event.data.human_count }} snapshot(s) with a person
+            while you were away.
+```
+
+## Exporting a report
+
+Every report on the Reports page has an **Export** button. It downloads a ZIP
+containing the report, the original full-resolution snapshots, the events as
+`events.csv` and `events.json`, and a `SHA256SUMS` file
+(`sha256sum -c SHA256SUMS` verifies nothing was altered) — useful for handing
+evidence to police or insurers, or keeping it beyond `retention_days`.
+
+Reports created before version 1.6.0 export the report and the snapshots
+embedded in it, without the CSV/JSON event data.
+
+A restart of the add-on during an away session no longer cuts the session
+short: the session start is remembered in `<media_path>/session.json`.
 
 ## The web panel
 

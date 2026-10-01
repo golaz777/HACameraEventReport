@@ -21,6 +21,11 @@ builds an HTML report with the answer at the top.
 - Web panel with saved reports, a live event feed, analytics and a camera test
   page
 - Optional email delivery and automatic cleanup of old events
+- **Home Assistant entities and events** — monitoring state, motion counts and
+  report results as entities, plus `camera_event_report_motion` /
+  `camera_event_report_report_ready` events for your own automations
+- **Evidence export** — download any report as a ZIP with the original
+  snapshots, CSV/JSON event data and SHA-256 checksums
 
 ## Quick start
 

@@ -18,6 +18,11 @@ A [Home Assistant](https://www.home-assistant.io) add-on that monitors cameras f
 - Camera test panel to verify snapshot capture works
 - Monitoring can be toggled via any HA entity (input_boolean, person, etc.)
 - Automatic retention policy to purge event data older than a configurable number of days
+- **Home Assistant entities and events** — monitoring state, motion counts and
+  report results as entities, plus `camera_event_report_motion` /
+  `camera_event_report_report_ready` events for your own automations
+- **Evidence export** — download any report as a ZIP with the original
+  snapshots, CSV/JSON event data and SHA-256 checksums
 
 ## Installation
 
@@ -75,6 +80,8 @@ configuration.
 | `retention_days` | int (optional) | Delete event data older than this many days on startup (default: 30, leave empty to disable) |
 | `detection.enabled` | bool | Analyse snapshots for people after monitoring ends (default: `true`) |
 | `detection.confidence` | float | Minimum score (0–1) to count as a person (default: `0.4`) |
+| `homeassistant.publish_entities` | bool | Publish the add-on's state as Home Assistant entities (default: `true`) |
+| `homeassistant.fire_events` | bool | Fire `camera_event_report_*` events on the Home Assistant event bus (default: `true`) |
 
 ### Camera configuration
 
@@ -118,6 +125,9 @@ monitoring:
 detection:
   enabled: true
   confidence: 0.4
+homeassistant:
+  publish_entities: true
+  fire_events: true
 ```
 
 ## Screenshots

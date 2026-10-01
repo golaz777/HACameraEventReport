@@ -2,6 +2,14 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.6.1] - 2026-10-01
+
+### Fixed
+- **Reports could be viewed, exported or deleted outside the media folder.**
+  An encoded slash (`%2F`) in the date part of a report URL was decoded into
+  an absolute path. The date must now be a real `YYYY-MM-DD` folder name and
+  the file must resolve inside `media_path`.
+
 ## [1.6.0] - 2026-10-01
 
 ### Added

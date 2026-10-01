@@ -1,5 +1,5 @@
 import pytest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from src.main import App
 from src.presence_guard import PresenceGuard
@@ -587,3 +587,53 @@ async def test_on_home_notifies_publisher():
     assert kwargs["report_path"] == "/media/camera_events/report.html"
     assert kwargs["event_count"] == 1
     assert kwargs["human_count"] == 0
+
+
+async def _toggle(app, state):
+    await app._on_ha_state_changed({
+        "event_type": "state_changed",
+        "data": {"entity_id": "input_boolean.away_mode", "new_state": {"state": state}},
+    })
+
+
+async def test_stale_session_not_resumed_after_unavailable_then_off(tmp_path):
+    old = datetime(2026, 9, 1, 20, 0, tzinfo=timezone.utc)
+    SessionState(tmp_path / "session.json").save(old)
+
+    app = await _setup_with_toggle(tmp_path, "unavailable")
+    await _toggle(app, "off")       # settled: user is home, session is over
+    assert not (tmp_path / "session.json").exists()
+
+    await _toggle(app, "on")        # days later: a new session
+    assert app._away_start != old
+
+
+async def test_setup_survives_corrupt_event_log_while_away(tmp_path):
+    SessionState(tmp_path / "session.json").save(datetime.now(tz=timezone.utc))
+    day = tmp_path / datetime.now(tz=timezone.utc).date().isoformat()
+    day.mkdir()
+    (day / "events.json").write_text('{"timestamp": "2026-10-01T20:')  # power cut mid-append
+
+    app = await _setup_with_toggle(tmp_path, "on")   # must not raise
+
+    assert app.presence_guard.is_away
+
+
+async def test_resumed_session_republishes_counts(tmp_path):
+    start = datetime.now(tz=timezone.utc) - timedelta(hours=1)
+    SessionState(tmp_path / "session.json").save(start)
+    event = _snap_event(start + timedelta(minutes=5))
+    publisher = AsyncMock()
+
+    with patch("src.main.HAPublisher", return_value=publisher):
+        app = await _setup_with_toggle(tmp_path, "unavailable")
+    app.store = MagicMock()
+    app.store.read = MagicMock(side_effect=lambda d: [event] if d == event.timestamp.date() else [])
+    publisher.reset_mock()
+
+    await _toggle(app, "on")
+
+    assert app._away_start == start
+    publisher.on_session_start.assert_not_called()
+    args = publisher.publish_initial.call_args.args
+    assert args[:3] == (True, start, [event])

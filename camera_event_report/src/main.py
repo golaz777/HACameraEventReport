@@ -38,6 +38,8 @@ class App:
         self.detector: HumanDetector | None = None
         self.session_state: SessionState | None = None
         self.publisher: HAPublisher | None = None
+        # Set when startup saw the toggle unavailable/unknown with a session on disk.
+        self._resume_pending = False
         self._away_start: datetime | None = None
         self._listen_task: asyncio.Task | None = None
         self._web_server: WebServer | None = None
@@ -94,18 +96,8 @@ class App:
             self.presence_guard.on_away(self._on_away)
             self.presence_guard.on_home(self._on_home)
 
-        is_away = self.presence_guard is not None and self.presence_guard.is_away
-        now = datetime.now(tz=timezone.utc)
-        session_events = (
-            self._session_events(self._away_start, now)
-            if is_away and self._away_start
-            else []
-        )
-        await self.publisher.publish_initial(
-            is_away,
-            self._away_start if is_away else None,
-            session_events,
-            load_report_info(self.config.media_path),
+        await self._publish_initial(
+            self.presence_guard is not None and self.presence_guard.is_away
         )
 
         await self.ha.subscribe_events("state_changed", self._on_ha_state_changed)
@@ -117,6 +109,11 @@ class App:
         if self.presence_guard and entity_id == self.config.monitoring.toggle_entity:
             new_state = (data.get("new_state") or {}).get("state", "")
             await self.presence_guard.handle_toggle_change(new_state)
+            if new_state == "off" and self._resume_pending:
+                # The deferred session ended while HA was unavailable.
+                logger.warning("Away session ended while the toggle was unavailable — no report generated")
+                self._resume_pending = False
+                self.session_state.clear()
         else:
             await self.handler.on_ha_state_changed(event)
 
@@ -133,21 +130,50 @@ class App:
                 self.session_state.save(self._away_start)
             else:
                 logger.info("Resumed away session started %s", self._away_start.isoformat())
-        elif toggle_state == "off" and self.session_state.load() is not None:
-            logger.warning(
-                "Away session ended while the add-on was not running — no report generated"
-            )
-            self.session_state.clear()
+        elif self.session_state.load() is not None:
+            if toggle_state == "off":
+                logger.warning(
+                    "Away session ended while the add-on was not running — no report generated"
+                )
+                self.session_state.clear()
+            else:
+                self._resume_pending = True
 
     async def _on_away(self) -> None:
         now = datetime.now(tz=timezone.utc)
-        persisted = self.session_state.load() if self.session_state else None
+        persisted = None
+        if self.session_state and self._resume_pending:
+            persisted = self.session_state.load()
+        self._resume_pending = False
         self._away_start = persisted or now
         if self.session_state:
             self.session_state.save(self._away_start)
         logger.info("Away monitoring started")
         if self.publisher:
-            await self.publisher.on_session_start(self._away_start)
+            if persisted:
+                # Resumed: the counters must include events before the outage.
+                await self._publish_initial(True)
+            else:
+                await self.publisher.on_session_start(self._away_start)
+
+    async def _publish_initial(self, is_away: bool) -> None:
+        """Push full state to HA. Reading the store can fail (e.g. a log
+        truncated by a power cut); that must not stop monitoring."""
+        try:
+            now = datetime.now(tz=timezone.utc)
+            session_events = (
+                self._session_events(self._away_start, now)
+                if is_away and self._away_start
+                else []
+            )
+            await self.publisher.publish_initial(
+                is_away,
+                self._away_start if is_away else None,
+                session_events,
+                load_report_info(self.config.media_path),
+            )
+        except Exception:
+            logger.warning("Could not rebuild state for Home Assistant", exc_info=True)
 
     def _session_events(self, start: datetime, end: datetime) -> list[MotionEvent]:
         """Events in [start, end], read across every day log the window touches."""

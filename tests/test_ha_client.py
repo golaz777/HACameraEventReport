@@ -212,3 +212,63 @@ async def test_connected_false_when_ws_closed(mock_ws, mock_session):
         client = HAClient()
         await client.connect()
     assert client.connected is False
+
+
+def _resp(status):
+    r = AsyncMock()
+    r.status = status
+    r.__aenter__ = AsyncMock(return_value=r)
+    r.__aexit__ = AsyncMock(return_value=False)
+    return r
+
+
+async def _connected_client(mock_ws, mock_session):
+    mock_ws.receive_json = AsyncMock(
+        side_effect=[{"type": "auth_required"}, {"type": "auth_ok"}]
+    )
+    client = HAClient()
+    await client.connect()
+    return client
+
+
+async def test_set_state_posts_state_and_attributes(mock_ws, mock_session):
+    mock_session.post = AsyncMock(return_value=_resp(201))
+    with patch("src.ha_client.aiohttp.ClientSession", return_value=mock_session), \
+         patch.dict("os.environ", {"SUPERVISOR_TOKEN": "tok"}):
+        client = await _connected_client(mock_ws, mock_session)
+        ok = await client.set_state("sensor.x", "5", {"friendly_name": "X"})
+
+    assert ok is True
+    args, kwargs = mock_session.post.call_args
+    assert args[0] == "http://supervisor/core/api/states/sensor.x"
+    assert kwargs["headers"]["Authorization"] == "Bearer tok"
+    assert kwargs["json"] == {"state": "5", "attributes": {"friendly_name": "X"}}
+
+
+async def test_set_state_returns_false_on_http_error(mock_ws, mock_session):
+    mock_session.post = AsyncMock(return_value=_resp(401))
+    with patch("src.ha_client.aiohttp.ClientSession", return_value=mock_session), \
+         patch.dict("os.environ", {"SUPERVISOR_TOKEN": "tok"}):
+        client = await _connected_client(mock_ws, mock_session)
+        assert await client.set_state("sensor.x", "5", {}) is False
+
+
+async def test_set_state_returns_false_on_connection_error(mock_ws, mock_session):
+    mock_session.post = AsyncMock(side_effect=OSError("refused"))
+    with patch("src.ha_client.aiohttp.ClientSession", return_value=mock_session), \
+         patch.dict("os.environ", {"SUPERVISOR_TOKEN": "tok"}):
+        client = await _connected_client(mock_ws, mock_session)
+        assert await client.set_state("sensor.x", "5", {}) is False
+
+
+async def test_fire_event_sends_websocket_message(mock_ws, mock_session):
+    with patch("src.ha_client.aiohttp.ClientSession", return_value=mock_session), \
+         patch.dict("os.environ", {"SUPERVISOR_TOKEN": "tok"}):
+        client = await _connected_client(mock_ws, mock_session)
+        await client.fire_event("camera_event_report_motion", {"camera_name": "Front"})
+
+    msg = mock_ws.send_json.call_args[0][0]
+    assert msg["type"] == "fire_event"
+    assert msg["event_type"] == "camera_event_report_motion"
+    assert msg["event_data"] == {"camera_name": "Front"}
+    assert isinstance(msg["id"], int)

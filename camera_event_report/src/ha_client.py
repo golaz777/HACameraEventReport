@@ -101,6 +101,35 @@ class HAClient:
             }
         )
 
+    async def set_state(self, entity_id: str, state: str, attributes: dict) -> bool:
+        """Create/update a state-only entity via the REST API. Never raises."""
+        token = os.environ["SUPERVISOR_TOKEN"]
+        url = f"http://supervisor/core/api/states/{entity_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            _resp = await self._session.post(
+                url, headers=headers, json={"state": state, "attributes": attributes}
+            )
+            async with _resp as resp:
+                if resp.status in (200, 201):
+                    return True
+                logger.warning("set_state %s failed: HTTP %d", entity_id, resp.status)
+                return False
+        except Exception as exc:
+            logger.warning("set_state %s error: %s", entity_id, exc)
+            return False
+
+    async def fire_event(self, event_type: str, event_data: dict) -> None:
+        self._msg_id += 1
+        await self._ws.send_json(
+            {
+                "id": self._msg_id,
+                "type": "fire_event",
+                "event_type": event_type,
+                "event_data": event_data,
+            }
+        )
+
     async def listen(self) -> None:
         """Message receive loop — run as the main asyncio task."""
         async for msg in self._ws:

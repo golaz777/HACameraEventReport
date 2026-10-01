@@ -717,3 +717,40 @@ async def test_encoded_slash_in_date_cannot_escape_media_path(tmp_path, method, 
         assert victim.exists()
     finally:
         await client.close()
+
+
+async def test_export_cancelled_mid_build_leaves_no_temp_file(tmp_path, monkeypatch):
+    import tempfile as _tempfile
+    import threading
+    from aiohttp.test_utils import make_mocked_request
+
+    _write_report(tmp_path)
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    monkeypatch.setattr(_tempfile, "tempdir", str(tmpdir))
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+
+    def slow_build(report, dest):
+        try:
+            started.set()
+            release.wait(5)
+            _Path(dest).write_bytes(b"zip")
+        finally:
+            finished.set()
+
+    server = _make_server(media_path=str(tmp_path))
+    request = make_mocked_request(
+        "GET", "/reports/export/2026-04-12/report_06-30-00.html",
+        match_info={"date": "2026-04-12", "filename": "report_06-30-00.html"},
+    )
+    with patch("src.web.build_export_zip", side_effect=slow_build):
+        task = asyncio.create_task(server._handle_report_export(request))
+        await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        await asyncio.sleep(0)   # deliver the cancellation while the worker still runs
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.to_thread(finished.wait, 5)
+
+    assert list(tmpdir.rglob("*")) == []

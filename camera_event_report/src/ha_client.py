@@ -9,6 +9,10 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+# State pushes run inside the event dispatch loop; a hung HA REST API must
+# not stall motion handling for aiohttp's 5-minute default.
+_STATE_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
 EventCallback = Callable[[dict], Awaitable[None]]
 
 
@@ -108,7 +112,10 @@ class HAClient:
         headers = {"Authorization": f"Bearer {token}"}
         try:
             _resp = await self._session.post(
-                url, headers=headers, json={"state": state, "attributes": attributes}
+                url,
+                headers=headers,
+                json={"state": state, "attributes": attributes},
+                timeout=_STATE_TIMEOUT,
             )
             async with _resp as resp:
                 if resp.status in (200, 201):

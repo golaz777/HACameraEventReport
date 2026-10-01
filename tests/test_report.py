@@ -379,3 +379,19 @@ def test_load_report_info_corrupt_sidecar_falls_back(tmp_path):
     info = load_report_info(str(tmp_path))
     assert info["event_count"] == 3
     assert info["timestamp"] == "2026-04-12T06:30:00+02:00"
+
+
+def test_load_report_info_legacy_report_after_local_midnight(tmp_path):
+    """Day dirs use the UTC date, filenames local time: 23:30 UTC on 04-12
+    is 01:30 CEST on 04-13 and was saved as 2026-04-12/report_01-30-00.html."""
+    day = tmp_path / "2026-04-12"
+    day.mkdir()
+    (day / "report_01-30-00.html").write_text("<html/>")
+    assert load_report_info(str(tmp_path))["timestamp"] == "2026-04-13T01:30:00+02:00"
+
+
+def test_load_report_info_non_date_directory_has_no_timestamp(tmp_path):
+    day = tmp_path / "old-reports"
+    day.mkdir()
+    (day / "report_06-30-00.html").write_text("<html/>")
+    assert load_report_info(str(tmp_path))["timestamp"] is None

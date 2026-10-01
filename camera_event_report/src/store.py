@@ -36,9 +36,15 @@ class EventStore:
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(_serialize(event)) + "\n")
 
-    def purge_old(self, retention_days: int) -> None:
-        """Remove day directories older than retention_days from today."""
+    def purge_old(self, retention_days: int, keep_from: date | None = None) -> None:
+        """Remove day directories older than retention_days from today.
+
+        Directories on or after keep_from (the start of a running away
+        session) are kept so a long absence still gets a complete report.
+        """
         cutoff = date.today() - timedelta(days=retention_days)
+        if keep_from is not None:
+            cutoff = min(cutoff, keep_from)
         if not self._base.exists():
             return
         for entry in self._base.iterdir():

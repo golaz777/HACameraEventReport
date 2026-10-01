@@ -272,3 +272,14 @@ async def test_fire_event_sends_websocket_message(mock_ws, mock_session):
     assert msg["event_type"] == "camera_event_report_motion"
     assert msg["event_data"] == {"camera_name": "Front"}
     assert isinstance(msg["id"], int)
+
+
+async def test_set_state_uses_short_timeout(mock_ws, mock_session):
+    """A hung HA REST API must not stall event dispatch for the 5 min default."""
+    mock_session.post = AsyncMock(return_value=_resp(200))
+    with patch("src.ha_client.aiohttp.ClientSession", return_value=mock_session), \
+         patch.dict("os.environ", {"SUPERVISOR_TOKEN": "tok"}):
+        client = await _connected_client(mock_ws, mock_session)
+        await client.set_state("sensor.x", "1", {})
+
+    assert mock_session.post.call_args.kwargs["timeout"].total <= 10

@@ -56,8 +56,6 @@ class App:
         await self._web_server.start()
 
         self.store = EventStore(self.config.media_path)
-        if self.config.retention_days is not None:
-            self.store.purge_old(self.config.retention_days)
         self.session_state = SessionState(Path(self.config.media_path) / "session.json")
 
         # Create PresenceGuard before EventHandler so it can be passed in
@@ -95,6 +93,16 @@ class App:
                 )
             self.presence_guard.on_away(self._on_away)
             self.presence_guard.on_home(self._on_home)
+
+        # Purge only once the session is restored, so its days are kept.
+        if self.config.retention_days is not None:
+            session_start = self._away_start or (
+                self.session_state.load() if self._resume_pending else None
+            )
+            self.store.purge_old(
+                self.config.retention_days,
+                keep_from=session_start.date() if session_start else None,
+            )
 
         await self._publish_initial(
             self.presence_guard is not None and self.presence_guard.is_away

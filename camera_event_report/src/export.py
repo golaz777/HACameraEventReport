@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 from src.report import read_manifest
 from src.snapshot import _slugify
-from src.store import _deserialize
+from src.store import MotionEvent, _deserialize
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ def build_export_zip(report_path: Path, dest: Path) -> None:
     """
     report_path = Path(report_path)
     manifest = read_manifest(report_path)
+    events = _parse_events(manifest) if manifest is not None else None
     sums: list[tuple[str, str]] = []
 
     with zipfile.ZipFile(dest, "w") as zf:
@@ -54,23 +55,31 @@ def build_export_zip(report_path: Path, dest: Path) -> None:
 
         html = report_path.read_bytes()
         add("report.html", html, True)
-        if manifest is None:
+        if events is None:
             _add_inline_images(html, add)
         else:
-            _add_manifest_files(manifest, add)
+            _add_manifest_files(manifest["events"], events, add)
 
         listing = "".join(f"{digest}  {name}\n" for digest, name in sums)
         zf.writestr("SHA256SUMS", listing, compress_type=zipfile.ZIP_DEFLATED)
 
 
-def _add_manifest_files(manifest: dict, add: AddFile) -> None:
+def _parse_events(manifest: dict) -> list[MotionEvent] | None:
+    """The manifest's events, or None if any record is malformed."""
+    try:
+        return [_deserialize(record) for record in manifest["events"]]
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Malformed report manifest, exporting in legacy mode: %s", exc)
+        return None
+
+
+def _add_manifest_files(records: list[dict], events: list[MotionEvent], add: AddFile) -> None:
     used: set[str] = set()
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=_CSV_FIELDS)
     writer.writeheader()
 
-    for record in manifest["events"]:
-        event = _deserialize(record)
+    for event in events:
         local = event.timestamp.astimezone(_CET)
         snapshot = ""
         if event.screenshot_path:
@@ -93,7 +102,7 @@ def _add_manifest_files(manifest: dict, add: AddFile) -> None:
         })
 
     add("events.csv", out.getvalue().encode("utf-8"), True)
-    add("events.json", json.dumps(manifest["events"], indent=2).encode("utf-8"), True)
+    add("events.json", json.dumps(records, indent=2).encode("utf-8"), True)
 
 
 def _add_inline_images(html: bytes, add: AddFile) -> None:

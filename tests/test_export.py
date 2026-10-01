@@ -164,3 +164,13 @@ def test_corrupt_sidecar_falls_back_to_legacy(tmp_path):
     with _zip(tmp_path, report) as zf:
         assert "events.csv" not in zf.namelist()
         assert zf.read("snapshots/snapshot_001.jpg") == JPEG_A
+
+
+def test_sidecar_with_malformed_events_falls_back_to_legacy(tmp_path):
+    a = base64.b64encode(JPEG_A).decode()
+    report = _report(tmp_path, html=f'<img src="data:image/jpeg;base64,{a}">')
+    report.with_suffix(".json").write_text(json.dumps({"version": 1, "events": [{"bogus": 1}]}))
+
+    with _zip(tmp_path, report) as zf:
+        assert set(zf.namelist()) == {"report.html", "SHA256SUMS", "snapshots/snapshot_001.jpg"}
+        _verify_sums(zf)

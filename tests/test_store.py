@@ -328,3 +328,20 @@ def test_update_detections_leaves_no_temp_file_behind(tmp_path):
 
     day_dir = tmp_path / night.isoformat()
     assert sorted(p.name for p in day_dir.iterdir()) == ["events.json"]
+
+
+def test_purge_old_keeps_directories_from_keep_from(tmp_path):
+    store = EventStore(base_path=str(tmp_path))
+    today = date(2026, 4, 22)
+    session_day = today - timedelta(days=40)
+    older = today - timedelta(days=41)
+    for d in (session_day, older):
+        (tmp_path / d.isoformat()).mkdir()
+
+    with patch("src.store.date") as mock_date:
+        mock_date.today.return_value = today
+        mock_date.fromisoformat = date.fromisoformat
+        store.purge_old(retention_days=30, keep_from=session_day)
+
+    assert (tmp_path / session_day.isoformat()).exists()
+    assert not (tmp_path / older.isoformat()).exists()

@@ -637,3 +637,14 @@ async def test_resumed_session_republishes_counts(tmp_path):
     publisher.on_session_start.assert_not_called()
     args = publisher.publish_initial.call_args.args
     assert args[:3] == (True, start, [event])
+
+
+async def test_setup_retention_keeps_days_of_resumed_session(tmp_path):
+    start = datetime.now(tz=timezone.utc) - timedelta(days=40)
+    SessionState(tmp_path / "session.json").save(start)
+    session_day = tmp_path / start.date().isoformat()
+    session_day.mkdir()
+
+    await _setup_with_toggle(tmp_path, "on")   # retention_days = 30
+
+    assert session_day.exists()

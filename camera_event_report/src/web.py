@@ -353,9 +353,15 @@ class WebServer:
         os.close(fd)
         tmp = Path(tmp_name)
         try:
+            # Snapshots can add up to tens of MB; keep the event loop free.
+            build = asyncio.ensure_future(asyncio.to_thread(build_export_zip, path, tmp))
             try:
-                # Snapshots can add up to tens of MB; keep the event loop free.
-                await asyncio.to_thread(build_export_zip, path, tmp)
+                await asyncio.shield(build)
+            except asyncio.CancelledError:
+                # The worker thread cannot be stopped. Let it finish before the
+                # finally block removes its output, or it would recreate it.
+                await asyncio.wait({build})
+                raise
             except Exception:
                 logger.exception("Export failed for %s", path)
                 return web.Response(status=500, text="Export failed")

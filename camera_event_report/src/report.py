@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import re
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 _CET = ZoneInfo("Europe/Paris")
@@ -211,12 +211,26 @@ def load_report_info(base_path: str) -> dict | None:
         info["human_count"] = manifest.get("human_count")
         info["detection_enabled"] = bool(manifest.get("detection_enabled"))
     if info["timestamp"] is None:
-        m = _REPORT_NAME_RE.fullmatch(newest["filename"])
-        if m:
-            local = datetime.combine(
-                date.fromisoformat(newest["date"]),
-                time(int(m[1]), int(m[2]), int(m[3])),
-                tzinfo=_CET,
-            )
-            info["timestamp"] = local.isoformat()
+        info["timestamp"] = _legacy_report_time(newest["date"], newest["filename"])
     return info
+
+
+def _legacy_report_time(day_dir: str, filename: str) -> str | None:
+    """Recover when a manifest-less report was saved.
+
+    Its directory is named by the UTC date but its filename carries local
+    (CET/CEST) time, so the local date may be the day after the directory.
+    """
+    m = _REPORT_NAME_RE.fullmatch(filename)
+    if not m:
+        return None
+    try:
+        utc_day = date.fromisoformat(day_dir)
+    except ValueError:
+        return None
+    clock = time(int(m[1]), int(m[2]), int(m[3]))
+    for local_day in (utc_day, utc_day + timedelta(days=1)):
+        local = datetime.combine(local_day, clock, tzinfo=_CET)
+        if local.astimezone(timezone.utc).date() == utc_day:
+            return local.isoformat()
+    return None

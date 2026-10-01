@@ -13,7 +13,7 @@ from src.detector import HumanDetector
 from src.ha_client import HAClient
 from src.presence_guard import PresenceGuard
 from src.event_handler import EventHandler
-from src.report import ReportEngine
+from src.report import ReportEngine, build_manifest
 from src.session_state import SessionState
 from src.notifier import Notifier
 from src.store import EventStore, MotionEvent
@@ -146,6 +146,7 @@ class App:
 
         human_count = await self._detect_humans(events)
 
+        detection_enabled = self.detector is not None and self.detector.available
         engine = ReportEngine()
         html = engine.generate(
             night=end_date,
@@ -153,9 +154,16 @@ class App:
             sunset_time=start.astimezone(_CET).strftime("%H:%M"),
             sunrise_time=now_cet.strftime("%H:%M"),
             human_count=human_count,
-            detection_enabled=self.detector is not None and self.detector.available,
+            detection_enabled=detection_enabled,
         )
-        report_path = engine.save(html, end_date, self.config.media_path, ts=now)
+        manifest = build_manifest(
+            events,
+            window_start=start,
+            window_end=now,
+            human_count=human_count,
+            detection_enabled=detection_enabled,
+        )
+        report_path = engine.save(html, end_date, self.config.media_path, ts=now, manifest=manifest)
         if self.session_state:
             self.session_state.clear()
 

@@ -530,3 +530,19 @@ def test_session_events_spans_days_and_filters_window():
     )
 
     assert app._session_events(start, end) == [early, late]
+
+
+async def test_on_home_passes_manifest_to_save():
+    ts = datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc)
+    event = _snap_event(ts)
+    app = _detection_app([event])
+    # Only the event's own day has it; the window runs until the real "now".
+    app.store.read = MagicMock(side_effect=lambda d: [event] if d == ts.date() else [])
+
+    engine = _patched_engine()
+    with patch("src.main.ReportEngine", return_value=engine):
+        await app._on_home()
+
+    manifest = engine.save.call_args.kwargs["manifest"]
+    assert manifest["window_start"] == app._away_start.isoformat()
+    assert len(manifest["events"]) == 1

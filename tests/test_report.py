@@ -266,3 +266,116 @@ def test_human_count_is_none_for_reports_without_detection(tmp_path, two_events)
     report = list_reports(str(tmp_path))[0]
     assert report["event_count"] == 2
     assert report["human_count"] is None
+
+
+import json
+from src.report import build_manifest, read_manifest, load_report_info
+
+
+def _manifest(events):
+    return build_manifest(
+        events,
+        window_start=datetime(2026, 4, 12, 20, 0, tzinfo=timezone.utc),
+        window_end=datetime(2026, 4, 13, 4, 30, tzinfo=timezone.utc),
+        human_count=1,
+        detection_enabled=True,
+    )
+
+
+def test_build_manifest_shape(two_events):
+    m = _manifest(two_events)
+    assert m["version"] == 1
+    assert m["window_start"] == "2026-04-12T20:00:00+00:00"
+    assert m["window_end"] == "2026-04-13T04:30:00+00:00"
+    assert m["human_count"] == 1
+    assert m["detection_enabled"] is True
+    assert [e["camera_entity"] for e in m["events"]] == ["camera.front_door", "camera.back_yard"]
+    assert m["events"][0]["human_detected"] is None
+
+
+def test_save_writes_sidecar_next_to_report(two_events, tmp_path):
+    engine = ReportEngine()
+    html = engine.generate(date(2026, 4, 12), two_events, "20:45", "06:12")
+    ts = datetime(2026, 4, 13, 4, 30, tzinfo=timezone.utc)
+    path = Path(engine.save(html, date(2026, 4, 12), str(tmp_path), ts=ts, manifest=_manifest(two_events)))
+
+    sidecar = path.with_suffix(".json")
+    assert sidecar.exists()
+    assert json.loads(sidecar.read_text())["human_count"] == 1
+    assert read_manifest(path)["version"] == 1
+
+
+def test_save_without_manifest_writes_no_sidecar(two_events, tmp_path):
+    engine = ReportEngine()
+    html = engine.generate(date(2026, 4, 12), two_events, "20:45", "06:12")
+    path = Path(engine.save(html, date(2026, 4, 12), str(tmp_path)))
+    assert not path.with_suffix(".json").exists()
+
+
+def test_sidecar_is_not_listed_as_report(two_events, tmp_path):
+    engine = ReportEngine()
+    html = engine.generate(date(2026, 4, 12), two_events, "20:45", "06:12")
+    engine.save(html, date(2026, 4, 12), str(tmp_path), manifest=_manifest(two_events))
+    reports = list_reports(str(tmp_path))
+    assert len(reports) == 1
+    assert reports[0]["filename"].endswith(".html")
+
+
+def test_read_manifest_corrupt_returns_none(tmp_path):
+    report = tmp_path / "report_06-30-00.html"
+    report.write_text("<html/>")
+    report.with_suffix(".json").write_text("{broken")
+    assert read_manifest(report) is None
+
+
+def test_load_report_info_none_when_no_reports(tmp_path):
+    assert load_report_info(str(tmp_path)) is None
+
+
+def test_load_report_info_uses_manifest(two_events, tmp_path):
+    engine = ReportEngine()
+    html = engine.generate(date(2026, 4, 12), two_events, "20:45", "06:12",
+                           human_count=1, detection_enabled=True)
+    ts = datetime(2026, 4, 13, 4, 30, tzinfo=timezone.utc)
+    path = engine.save(html, date(2026, 4, 12), str(tmp_path), ts=ts, manifest=_manifest(two_events))
+
+    info = load_report_info(str(tmp_path))
+    assert info == {
+        "timestamp": "2026-04-13T04:30:00+00:00",
+        "event_count": 2,
+        "human_count": 1,
+        "detection_enabled": True,
+        "report_path": path,
+    }
+
+
+def test_load_report_info_legacy_report_derives_timestamp(tmp_path):
+    day = tmp_path / "2026-04-12"
+    day.mkdir()
+    (day / "report_06-30-00.html").write_text(
+        "<strong>Total events:</strong> <span>3</span>"
+    )
+    info = load_report_info(str(tmp_path))
+    assert info["event_count"] == 3
+    assert info["human_count"] is None
+    assert info["detection_enabled"] is False
+    # 06:30 CEST on 2026-04-12
+    assert info["timestamp"] == "2026-04-12T06:30:00+02:00"
+
+
+def test_load_report_info_unparseable_name_has_no_timestamp(tmp_path):
+    day = tmp_path / "2026-04-12"
+    day.mkdir()
+    (day / "report.html").write_text("<html/>")
+    assert load_report_info(str(tmp_path))["timestamp"] is None
+
+
+def test_load_report_info_corrupt_sidecar_falls_back(tmp_path):
+    day = tmp_path / "2026-04-12"
+    day.mkdir()
+    report = day / "report_06-30-00.html"
+    report.write_text("<strong>Total events:</strong> <span>3</span>")
+    report.with_suffix(".json").write_text("{broken")
+    info = load_report_info(str(tmp_path))
+    assert info["event_count"] == 3
+    assert info["timestamp"] == "2026-04-12T06:30:00+02:00"

@@ -2,6 +2,20 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.6.2] - 2026-10-01
+
+### Fixed
+- **Long away sessions lost their first days after a restart.** The
+  retention purge now runs after the session is restored and keeps every day
+  from the session start onwards.
+- **Exporting a report with a malformed manifest failed with an error.** It
+  now falls back to exporting the report and its embedded snapshots.
+- **The "last report" time could be a day off for reports made before
+  1.6.0** when they were saved shortly after local midnight.
+- **A cancelled export could leave a temporary ZIP file behind.**
+- **A hung Home Assistant API could stall motion handling for minutes.**
+  Entity updates now time out after 10 seconds.
+
 ## [1.6.1] - 2026-10-01
 
 ### Fixed

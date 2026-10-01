@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import os
+import re
 import tempfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,9 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 # Max number of today's events sent to a Live client on connect (matches the
 # browser-side MAX_EVENTS cap in live.html.j2).
 _BACKLOG_LIMIT = 50
+
+# Day directories under media_path are named by EventStore/ReportEngine.
+_DAY_DIR_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class WebServer:
@@ -329,9 +333,14 @@ class WebServer:
         """Map {date}/{filename} to a saved report, or an error response."""
         date_str = request.match_info["date"]
         filename = request.match_info["filename"]
-        if ".." in date_str or ".." in filename or "/" in filename:
+        # aiohttp decodes %2F inside match_info, so {date} can arrive as an
+        # absolute path. Only accept a real day directory name.
+        if not _DAY_DIR_RE.fullmatch(date_str) or ".." in filename or "/" in filename:
             return web.Response(status=400, text="Bad request")
-        path = Path(self._config.media_path) / date_str / filename
+        base = Path(self._config.media_path).resolve()
+        path = (base / date_str / filename).resolve()
+        if not path.is_relative_to(base):
+            return web.Response(status=400, text="Bad request")
         if not path.exists() or not path.name.startswith("report") or path.suffix != ".html":
             return web.Response(status=404, text="Report not found")
         return path

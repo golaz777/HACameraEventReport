@@ -691,3 +691,29 @@ async def test_reports_page_has_export_link(tmp_path):
         assert 'href="/api/hassio_ingress/abc/reports/export/2026-04-12/report_06-30-00.html"' in text
     finally:
         await client.close()
+
+
+@pytest.mark.parametrize("method,prefix", [
+    ("get", "/reports/view"),
+    ("get", "/reports/export"),
+    ("delete", "/reports/delete"),
+])
+async def test_encoded_slash_in_date_cannot_escape_media_path(tmp_path, method, prefix):
+    """aiohttp decodes %2F in match_info, so {date} could be an absolute path."""
+    media = tmp_path / "media"
+    media.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "report_06-30-00.html"
+    victim.write_text("<html>not yours</html>")
+    encoded_dir = str(outside).replace("/", "%2F")
+
+    server = _make_server(media_path=str(media))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await getattr(client, method)(f"{prefix}/{encoded_dir}/report_06-30-00.html")
+        assert resp.status == 400
+        assert victim.exists()
+    finally:
+        await client.close()

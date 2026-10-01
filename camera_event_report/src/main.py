@@ -1,7 +1,8 @@
 from __future__ import annotations
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 _CET = ZoneInfo("Europe/Paris")
@@ -13,8 +14,9 @@ from src.ha_client import HAClient
 from src.presence_guard import PresenceGuard
 from src.event_handler import EventHandler
 from src.report import ReportEngine
+from src.session_state import SessionState
 from src.notifier import Notifier
-from src.store import EventStore
+from src.store import EventStore, MotionEvent
 from src.web import WebServer
 
 logging.basicConfig(
@@ -33,6 +35,7 @@ class App:
         self.handler: EventHandler | None = None
         self.notifier: Notifier | None = None
         self.detector: HumanDetector | None = None
+        self.session_state: SessionState | None = None
         self._away_start: datetime | None = None
         self._listen_task: asyncio.Task | None = None
         self._web_server: WebServer | None = None
@@ -51,6 +54,7 @@ class App:
         self.store = EventStore(self.config.media_path)
         if self.config.retention_days is not None:
             self.store.purge_old(self.config.retention_days)
+        self.session_state = SessionState(Path(self.config.media_path) / "session.json")
 
         # Create PresenceGuard before EventHandler so it can be passed in
         if self.config.monitoring.toggle_entity:
@@ -73,8 +77,7 @@ class App:
             )
             if toggle_state:
                 self.presence_guard.update_state(toggle_state["state"])
-                if self.presence_guard.is_away:
-                    self._away_start = datetime.now(tz=timezone.utc)
+                self._restore_session(toggle_state["state"])
             else:
                 logger.warning(
                     "Toggle entity %s not found in HA",
@@ -95,9 +98,42 @@ class App:
         else:
             await self.handler.on_ha_state_changed(event)
 
+    def _restore_session(self, toggle_state: str) -> None:
+        """Recover the away start persisted before a restart.
+
+        Only an explicit "off" discards it: "unavailable"/"unknown" while HA
+        boots must not truncate a session that is still running.
+        """
+        if self.presence_guard.is_away:
+            self._away_start = self.session_state.load()
+            if self._away_start is None:
+                self._away_start = datetime.now(tz=timezone.utc)
+                self.session_state.save(self._away_start)
+            else:
+                logger.info("Resumed away session started %s", self._away_start.isoformat())
+        elif toggle_state == "off" and self.session_state.load() is not None:
+            logger.warning(
+                "Away session ended while the add-on was not running — no report generated"
+            )
+            self.session_state.clear()
+
     async def _on_away(self) -> None:
-        self._away_start = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=timezone.utc)
+        persisted = self.session_state.load() if self.session_state else None
+        self._away_start = persisted or now
+        if self.session_state:
+            self.session_state.save(self._away_start)
         logger.info("Away monitoring started")
+
+    def _session_events(self, start: datetime, end: datetime) -> list[MotionEvent]:
+        """Events in [start, end], read across every day log the window touches."""
+        events: list[MotionEvent] = []
+        d = start.date()
+        while d <= end.date():
+            events.extend(self.store.read(d))
+            d += timedelta(days=1)
+        events.sort(key=lambda e: e.timestamp)
+        return [e for e in events if e.timestamp >= start]
 
     async def _on_home(self) -> None:
         now = datetime.now(tz=timezone.utc)
@@ -105,17 +141,8 @@ class App:
         start = self._away_start or now
         logger.info("Away monitoring ended — generating report")
 
-        # Collect events across all dates from start to now (handles multi-day absences)
-        start_date = start.date()
         end_date = now.date()
-        events = []
-        d = start_date
-        while d <= end_date:
-            events.extend(self.store.read(d))
-            d = date.fromordinal(d.toordinal() + 1)
-        events.sort(key=lambda e: e.timestamp)
-        # Keep only events that occurred during the away window
-        events = [e for e in events if e.timestamp >= start]
+        events = self._session_events(start, now)
 
         human_count = await self._detect_humans(events)
 
@@ -129,6 +156,8 @@ class App:
             detection_enabled=self.detector is not None and self.detector.available,
         )
         report_path = engine.save(html, end_date, self.config.media_path, ts=now)
+        if self.session_state:
+            self.session_state.clear()
 
         await self.notifier.send_ha_notification(
             end_date, len(events), report_path, human_count=human_count

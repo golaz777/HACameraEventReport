@@ -429,3 +429,104 @@ async def test_setup_skips_detector_when_disabled():
         await app.setup()
 
     assert app.detector is None
+
+
+from pathlib import Path
+from src.session_state import SessionState
+
+
+def _toggle_config(tmp_path):
+    cfg = _base_mock_config()
+    cfg.media_path = str(tmp_path)
+    cfg.monitoring.toggle_entity = "input_boolean.away_mode"
+    cfg.detection.enabled = False
+    return cfg
+
+
+async def _setup_with_toggle(tmp_path, toggle_state):
+    mock_ha = AsyncMock()
+    mock_ha.get_state = AsyncMock(return_value={"state": toggle_state})
+    with patch("src.main.HAClient", return_value=mock_ha), \
+         patch("src.main.load_config", return_value=_toggle_config(tmp_path)), \
+         patch("src.main.WebServer", return_value=AsyncMock()):
+        app = App()
+        await app.setup()
+    return app
+
+
+async def test_setup_restores_persisted_away_start(tmp_path):
+    start = datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)
+    SessionState(tmp_path / "session.json").save(start)
+
+    app = await _setup_with_toggle(tmp_path, "on")
+
+    assert app._away_start == start
+
+
+async def test_setup_persists_away_start_when_no_file(tmp_path):
+    app = await _setup_with_toggle(tmp_path, "on")
+
+    assert app._away_start is not None
+    assert SessionState(tmp_path / "session.json").load() == app._away_start
+
+
+async def test_setup_clears_stale_session_when_toggle_off(tmp_path):
+    SessionState(tmp_path / "session.json").save(
+        datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)
+    )
+
+    await _setup_with_toggle(tmp_path, "off")
+
+    assert not (tmp_path / "session.json").exists()
+
+
+async def test_setup_keeps_session_when_toggle_unavailable(tmp_path):
+    start = datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)
+    SessionState(tmp_path / "session.json").save(start)
+
+    app = await _setup_with_toggle(tmp_path, "unavailable")
+    assert SessionState(tmp_path / "session.json").load() == start
+
+    # Toggle comes back "on": the session resumes from the persisted start.
+    await app.presence_guard.handle_toggle_change("on")
+    assert app._away_start == start
+
+
+async def test_on_away_persists_start(tmp_path):
+    app = App()
+    app.config = MagicMock()
+    app.session_state = SessionState(tmp_path / "session.json")
+
+    await app._on_away()
+
+    assert app.session_state.load() == app._away_start
+
+
+async def test_on_home_clears_session_state(tmp_path):
+    app = _detection_app([])
+    app.session_state = SessionState(tmp_path / "session.json")
+    app.session_state.save(app._away_start)
+
+    with patch("src.main.ReportEngine", return_value=_patched_engine()):
+        await app._on_home()
+
+    assert app.session_state.load() is None
+
+
+def test_session_events_spans_days_and_filters_window():
+    start = datetime(2026, 10, 1, 22, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 2, 6, 0, tzinfo=timezone.utc)
+    before = _snap_event(datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc))
+    late = _snap_event(datetime(2026, 10, 2, 1, 0, tzinfo=timezone.utc))
+    early = _snap_event(datetime(2026, 10, 1, 23, 0, tzinfo=timezone.utc))
+
+    app = App()
+    app.store = MagicMock()
+    app.store.read = MagicMock(
+        side_effect=lambda d: {
+            date(2026, 10, 1): [before, early],
+            date(2026, 10, 2): [late],
+        }[d]
+    )
+
+    assert app._session_events(start, end) == [early, late]

@@ -2,6 +2,36 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.5.0] - 2026-10-01
+
+### Added
+- **Human detection in snapshots** — when away monitoring ends, every snapshot
+  from the session is analysed locally with an SSD MobileNet V1 ONNX model and
+  marked as containing a person or not. Runs entirely on-device: no API keys,
+  no cloud, no images leaving your hardware.
+- The saved report gains a **Person** column (Human / Clear / — for frames that
+  were not analysed) and a `Humans detected: N of M snapshot(s)` summary line.
+- The Reports page shows a **human badge** on any session where a person was
+  found, so an intruder is visible without opening the report.
+- The Home Assistant persistent notification now leads with the human count
+  when a person was detected.
+- Verdicts are stored in each day's `events.json` as `human_detected` and
+  `human_confidence` for use by your own automations.
+- New `detection` options: `enabled` (default `true`) and `confidence`
+  (default `0.4`).
+
+### Fixed
+- **Report event counts never appeared on the Reports page** — the parser that
+  recovers the event count from a saved report did not account for the `<span>`
+  wrapper in the summary block, so every report showed no count.
+
+### Notes
+- Detection needs `onnxruntime`, which publishes no wheels for the `armhf`,
+  `armv7` and `i386` architectures. On those the add-on installs and runs
+  exactly as before, logging one warning and skipping analysis.
+- The bundled model weights are MIT licensed — see `NOTICE` for provenance
+  and checksum.
+
 ## [1.4.1] - 2026-07-15
 
 ### Fixed

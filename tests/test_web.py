@@ -561,3 +561,133 @@ async def test_get_analytics_custom_date_range(tmp_path):
         assert "2" in text  # Should show 2 events in last 2 days
     finally:
         await client.close()
+
+
+import io
+import zipfile
+
+
+def _write_report(tmp_path, with_sidecar=False):
+    day = tmp_path / "2026-04-12"
+    day.mkdir(exist_ok=True)
+    report = day / "report_06-30-00.html"
+    report.write_text("<html><body>r</body></html>")
+    if with_sidecar:
+        report.with_suffix(".json").write_text(
+            '{"version": 1, "window_start": null, "window_end": null, '
+            '"human_count": 0, "detection_enabled": false, "events": []}'
+        )
+    return report
+
+
+async def test_export_report_returns_zip(tmp_path):
+    _write_report(tmp_path, with_sidecar=True)
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/reports/export/2026-04-12/report_06-30-00.html")
+        assert resp.status == 200
+        assert resp.headers["Content-Type"] == "application/zip"
+        assert resp.headers["Content-Disposition"] == (
+            'attachment; filename="camera-report_2026-04-12_06-30-00.zip"'
+        )
+        zf = zipfile.ZipFile(io.BytesIO(await resp.read()))
+        assert "report.html" in zf.namelist()
+        assert "events.csv" in zf.namelist()
+    finally:
+        await client.close()
+
+
+async def test_export_report_cleans_up_temp_file(tmp_path, monkeypatch):
+    import tempfile as _tempfile
+    _write_report(tmp_path)
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    monkeypatch.setattr(_tempfile, "tempdir", str(tmpdir))
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/reports/export/2026-04-12/report_06-30-00.html")
+        await resp.read()
+        assert list(tmpdir.iterdir()) == []
+    finally:
+        await client.close()
+
+
+async def test_export_report_not_found(tmp_path):
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/reports/export/2026-04-12/report_06-30-00.html")
+        assert resp.status == 404
+    finally:
+        await client.close()
+
+
+async def test_export_report_rejects_traversal(tmp_path):
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/reports/export/..%2F..%2Fetc/report_00-00-00.html")
+        assert resp.status in (400, 404)
+        resp = await client.get("/reports/export/2026-04-12/..report_00-00-00.html")
+        assert resp.status == 400
+    finally:
+        await client.close()
+
+
+async def test_export_report_build_failure_returns_500(tmp_path):
+    _write_report(tmp_path)
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        with patch("src.web.build_export_zip", side_effect=RuntimeError("disk full")):
+            resp = await client.get("/reports/export/2026-04-12/report_06-30-00.html")
+        assert resp.status == 500
+    finally:
+        await client.close()
+
+
+async def test_delete_report_removes_sidecar(tmp_path):
+    report = _write_report(tmp_path, with_sidecar=True)
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.delete("/reports/delete/2026-04-12/report_06-30-00.html")
+        assert resp.status == 204
+        assert not report.with_suffix(".json").exists()
+        assert not report.parent.exists()
+    finally:
+        await client.close()
+
+
+async def test_delete_all_removes_sidecars(tmp_path):
+    report = _write_report(tmp_path, with_sidecar=True)
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.delete("/reports/delete-all")
+        assert resp.status == 204
+        assert not report.parent.exists()
+    finally:
+        await client.close()
+
+
+async def test_reports_page_has_export_link(tmp_path):
+    _write_report(tmp_path)
+    server = _make_server(media_path=str(tmp_path))
+    client = TestClient(TestServer(server._app))
+    await client.start_server()
+    try:
+        resp = await client.get("/", headers={"X-Ingress-Path": "/api/hassio_ingress/abc"})
+        text = await resp.text()
+        assert 'href="/api/hassio_ingress/abc/reports/export/2026-04-12/report_06-30-00.html"' in text
+    finally:
+        await client.close()

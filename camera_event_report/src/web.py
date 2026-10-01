@@ -11,6 +11,7 @@ import aiohttp.web as web
 from jinja2 import Environment, FileSystemLoader
 
 from src.config import Config
+from src.export import build_export_zip, export_filename
 from src.ha_client import HAClient
 from src.report import list_reports
 from src.snapshot import _slugify, encode_screenshot
@@ -44,6 +45,7 @@ class WebServer:
         self._app.router.add_get("/events/stream", self._handle_events_stream)
         self._app.router.add_post("/test/{slug}", self._handle_test)
         self._app.router.add_get("/reports/view/{date}/{filename}", self._handle_report_file)
+        self._app.router.add_get("/reports/export/{date}/{filename}", self._handle_report_export)
         self._app.router.add_delete("/reports/delete-all", self._handle_reports_delete_all)
         self._app.router.add_delete("/reports/delete/{date}/{filename}", self._handle_report_delete)
         self._runner: web.AppRunner | None = None
@@ -323,7 +325,8 @@ class WebServer:
         )
         return web.Response(text=html, content_type="text/html")
 
-    async def _handle_report_file(self, request: web.Request) -> web.Response:
+    def _resolve_report_path(self, request: web.Request) -> Path | web.Response:
+        """Map {date}/{filename} to a saved report, or an error response."""
         date_str = request.match_info["date"]
         filename = request.match_info["filename"]
         if ".." in date_str or ".." in filename or "/" in filename:
@@ -331,6 +334,40 @@ class WebServer:
         path = Path(self._config.media_path) / date_str / filename
         if not path.exists() or not path.name.startswith("report") or path.suffix != ".html":
             return web.Response(status=404, text="Report not found")
+        return path
+
+    async def _handle_report_export(self, request: web.Request) -> web.StreamResponse:
+        path = self._resolve_report_path(request)
+        if isinstance(path, web.Response):
+            return path
+        fd, tmp_name = tempfile.mkstemp(suffix=".zip")
+        os.close(fd)
+        tmp = Path(tmp_name)
+        try:
+            try:
+                # Snapshots can add up to tens of MB; keep the event loop free.
+                await asyncio.to_thread(build_export_zip, path, tmp)
+            except Exception:
+                logger.exception("Export failed for %s", path)
+                return web.Response(status=500, text="Export failed")
+            resp = web.StreamResponse(headers={
+                "Content-Type": "application/zip",
+                "Content-Disposition": f'attachment; filename="{export_filename(path)}"',
+            })
+            resp.content_length = tmp.stat().st_size
+            await resp.prepare(request)
+            with open(tmp, "rb") as f:
+                while chunk := f.read(64 * 1024):
+                    await resp.write(chunk)
+            await resp.write_eof()
+            return resp
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    async def _handle_report_file(self, request: web.Request) -> web.Response:
+        path = self._resolve_report_path(request)
+        if isinstance(path, web.Response):
+            return path
         ingress_path = request.headers.get("X-Ingress-Path", "").rstrip("/")
         html = path.read_text(encoding="utf-8")
         nav = (
@@ -342,14 +379,11 @@ class WebServer:
         return web.Response(text=html, content_type="text/html")
 
     async def _handle_report_delete(self, request: web.Request) -> web.Response:
-        date_str = request.match_info["date"]
-        filename = request.match_info["filename"]
-        if ".." in date_str or ".." in filename or "/" in filename:
-            return web.Response(status=400, text="Bad request")
-        path = Path(self._config.media_path) / date_str / filename
-        if not path.exists() or not path.name.startswith("report") or path.suffix != ".html":
-            return web.Response(status=404, text="Report not found")
+        path = self._resolve_report_path(request)
+        if isinstance(path, web.Response):
+            return path
         path.unlink()
+        path.with_suffix(".json").unlink(missing_ok=True)
         # Remove the date directory if it is now empty
         try:
             path.parent.rmdir()
@@ -368,6 +402,8 @@ class WebServer:
                 for f in day_dir.glob("report*.html"):
                     f.unlink()
                     deleted += 1
+                for f in day_dir.glob("report*.json"):
+                    f.unlink()
                 # Remove the date directory if it is now empty
                 try:
                     day_dir.rmdir()

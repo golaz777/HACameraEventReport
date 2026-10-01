@@ -102,6 +102,7 @@
                     </div>
                     <div class="actions">
                         <a class="view-btn" href="{{ ingress_path }}/reports/view/{{ r.date }}/{{ r.filename }}">View</a>
+                        <a class="view-btn" href="{{ ingress_path }}/reports/export/{{ r.date }}/{{ r.filename }}" download title="Download report, original snapshots and event data as a ZIP">Export</a>
                         <button class="del-btn" onclick="deleteReport('{{ r.date }}', '{{ r.filename }}', this)">Delete</button>
                     </div>
                 </li>

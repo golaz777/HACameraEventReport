@@ -34,6 +34,12 @@ class DetectionConfig:
 
 
 @dataclass
+class HomeAssistantConfig:
+    publish_entities: bool = True
+    fire_events: bool = True
+
+
+@dataclass
 class Config:
     cameras: list[CameraConfig]
     email: EmailConfig
@@ -45,6 +51,7 @@ class Config:
         default_factory=lambda: MonitoringConfig(toggle_entity="")
     )
     detection: DetectionConfig = field(default_factory=DetectionConfig)
+    homeassistant: HomeAssistantConfig = field(default_factory=HomeAssistantConfig)
 
 
 def load_config(path: str = "/data/options.json") -> Config:
@@ -106,6 +113,12 @@ def load_config(path: str = "/data/options.json") -> Config:
     else:
         retention_days = int(raw_retention)
 
+    ha_data = data.get("homeassistant", {})
+    homeassistant = HomeAssistantConfig(
+        publish_entities=ha_data.get("publish_entities", True),
+        fire_events=ha_data.get("fire_events", True),
+    )
+
     return Config(
         cameras=cameras,
         email=email,
@@ -115,4 +128,5 @@ def load_config(path: str = "/data/options.json") -> Config:
         retention_days=retention_days,
         monitoring=monitoring,
         detection=detection,
+        homeassistant=homeassistant,
     )

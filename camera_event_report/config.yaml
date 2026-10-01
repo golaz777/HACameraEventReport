@@ -38,6 +38,9 @@ options:
   detection:
     enabled: true
     confidence: 0.4
+  homeassistant:
+    publish_entities: true
+    fire_events: true
 schema:
   cameras:
     - entity_id: str
@@ -62,3 +65,6 @@ schema:
   detection:
     enabled: bool
     confidence: float
+  homeassistant:
+    publish_entities: bool?
+    fire_events: bool?

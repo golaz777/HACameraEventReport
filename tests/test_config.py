@@ -338,3 +338,17 @@ def test_detection_blank_model_path_falls_back_to_default(tmp_path):
     config = _load(tmp_path, _base_options(detection={"model_path": ""}))
 
     assert config.detection.model_path == "/app/models/ssd_mobilenet_v1_12.onnx"
+
+
+def test_homeassistant_block_defaults_to_enabled(tmp_path):
+    config = _load(tmp_path, _base_options())
+    assert config.homeassistant.publish_entities is True
+    assert config.homeassistant.fire_events is True
+
+
+def test_homeassistant_block_parsed(tmp_path):
+    config = _load(tmp_path, _base_options(
+        homeassistant={"publish_entities": False, "fire_events": True}
+    ))
+    assert config.homeassistant.publish_entities is False
+    assert config.homeassistant.fire_events is True

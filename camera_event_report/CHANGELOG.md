@@ -2,6 +2,17 @@
 
 All notable changes to Camera Event Report are documented here.
 
+## [1.5.1] - 2026-10-01
+
+### Fixed
+- **Changelog was not shown in Home Assistant.** The Supervisor reads an
+  add-on's `CHANGELOG.md` from the add-on's own directory, next to
+  `config.yaml`; this file previously lived at the repository root, where Home
+  Assistant never looks. Nothing about the add-on's behaviour changed.
+
+Human detection arrived in 1.5.0 — see the entry below for what it does and
+how to configure it.
+
 ## [1.5.0] - 2026-10-01
 
 ### Added

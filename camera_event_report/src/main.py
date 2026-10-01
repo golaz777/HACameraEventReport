@@ -13,7 +13,8 @@ from src.detector import HumanDetector
 from src.ha_client import HAClient
 from src.presence_guard import PresenceGuard
 from src.event_handler import EventHandler
-from src.report import ReportEngine, build_manifest
+from src.ha_publisher import HAPublisher
+from src.report import ReportEngine, build_manifest, load_report_info
 from src.session_state import SessionState
 from src.notifier import Notifier
 from src.store import EventStore, MotionEvent
@@ -36,6 +37,7 @@ class App:
         self.notifier: Notifier | None = None
         self.detector: HumanDetector | None = None
         self.session_state: SessionState | None = None
+        self.publisher: HAPublisher | None = None
         self._away_start: datetime | None = None
         self._listen_task: asyncio.Task | None = None
         self._web_server: WebServer | None = None
@@ -60,8 +62,14 @@ class App:
         if self.config.monitoring.toggle_entity:
             self.presence_guard = PresenceGuard()
 
+        self.publisher = HAPublisher(
+            self.ha,
+            publish_entities=self.config.homeassistant.publish_entities,
+            fire_events=self.config.homeassistant.fire_events,
+        )
         self.handler = EventHandler(
-            self.config, self.ha, self.store, self.presence_guard, self._broadcaster
+            self.config, self.ha, self.store, self.presence_guard, self._broadcaster,
+            self.publisher,
         )
         self.notifier = Notifier(self.config, self.ha)
 
@@ -85,6 +93,20 @@ class App:
                 )
             self.presence_guard.on_away(self._on_away)
             self.presence_guard.on_home(self._on_home)
+
+        is_away = self.presence_guard is not None and self.presence_guard.is_away
+        now = datetime.now(tz=timezone.utc)
+        session_events = (
+            self._session_events(self._away_start, now)
+            if is_away and self._away_start
+            else []
+        )
+        await self.publisher.publish_initial(
+            is_away,
+            self._away_start if is_away else None,
+            session_events,
+            load_report_info(self.config.media_path),
+        )
 
         await self.ha.subscribe_events("state_changed", self._on_ha_state_changed)
 
@@ -124,6 +146,8 @@ class App:
         if self.session_state:
             self.session_state.save(self._away_start)
         logger.info("Away monitoring started")
+        if self.publisher:
+            await self.publisher.on_session_start(self._away_start)
 
     def _session_events(self, start: datetime, end: datetime) -> list[MotionEvent]:
         """Events in [start, end], read across every day log the window touches."""
@@ -171,6 +195,15 @@ class App:
             end_date, len(events), report_path, human_count=human_count
         )
         await self.notifier.send_email(end_date, len(events), html)
+        if self.publisher:
+            await self.publisher.on_report(
+                night=end_date,
+                report_path=report_path,
+                event_count=len(events),
+                human_count=human_count,
+                detection_enabled=detection_enabled,
+                ts=now,
+            )
         logger.info(
             "Away report sent (%d events, %d with humans)", len(events), human_count
         )

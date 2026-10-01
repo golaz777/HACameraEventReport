@@ -546,3 +546,44 @@ async def test_on_home_passes_manifest_to_save():
     manifest = engine.save.call_args.kwargs["manifest"]
     assert manifest["window_start"] == app._away_start.isoformat()
     assert len(manifest["events"]) == 1
+
+
+async def test_setup_publishes_initial_state(tmp_path):
+    start = datetime(2026, 10, 1, 20, 0, tzinfo=timezone.utc)
+    SessionState(tmp_path / "session.json").save(start)
+    publisher = AsyncMock()
+
+    with patch("src.main.HAPublisher", return_value=publisher):
+        app = await _setup_with_toggle(tmp_path, "on")
+
+    publisher.publish_initial.assert_awaited_once()
+    args = publisher.publish_initial.call_args.args
+    assert args[0] is True
+    assert args[1] == start
+    assert args[2] == []      # store is empty
+    assert args[3] is None    # no reports yet
+    assert app.handler._publisher is publisher
+
+
+async def test_on_away_notifies_publisher():
+    app = App()
+    app.config = MagicMock()
+    app.publisher = AsyncMock()
+    await app._on_away()
+    app.publisher.on_session_start.assert_awaited_once_with(app._away_start)
+
+
+async def test_on_home_notifies_publisher():
+    ts = datetime(2026, 10, 1, 21, 0, tzinfo=timezone.utc)
+    event = _snap_event(ts)
+    app = _detection_app([event])
+    app.store.read = MagicMock(side_effect=lambda d: [event] if d == ts.date() else [])
+    app.publisher = AsyncMock()
+
+    with patch("src.main.ReportEngine", return_value=_patched_engine()):
+        await app._on_home()
+
+    kwargs = app.publisher.on_report.call_args.kwargs
+    assert kwargs["report_path"] == "/media/camera_events/report.html"
+    assert kwargs["event_count"] == 1
+    assert kwargs["human_count"] == 0

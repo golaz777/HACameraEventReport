@@ -10,12 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class EventHandler:
-    def __init__(self, config: Config, ha_client, store: EventStore, presence_guard=None, broadcaster=None):
+    def __init__(self, config: Config, ha_client, store: EventStore, presence_guard=None, broadcaster=None, publisher=None):
         self._config = config
         self._ha = ha_client
         self._store = store
         self._presence_guard = presence_guard
         self._broadcaster = broadcaster
+        self._publisher = publisher
         self._last_trigger: dict[str, datetime] = {}
 
     def _in_cooldown(self, camera: CameraConfig, now: datetime) -> bool:
@@ -50,6 +51,12 @@ class EventHandler:
             screenshot_path=screenshot_path,
         )
         self._store.append(now.date(), event)
+
+        if self._publisher is not None:
+            try:
+                await self._publisher.on_motion(event)
+            except Exception:
+                logger.warning("Publishing motion to HA failed", exc_info=True)
 
         if self._broadcaster is not None:
             screenshot_b64 = encode_screenshot(screenshot_path)

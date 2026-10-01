@@ -144,3 +144,36 @@ async def test_on_ha_state_changed_ignores_off_state(camera, config):
     })
 
     assert not mock_store.append.called
+
+
+async def test_on_motion_notifies_publisher_after_append(camera, config):
+    mock_ha = AsyncMock()
+    mock_ha.camera_snapshot = AsyncMock(return_value=True)
+    mock_store = MagicMock()
+    publisher = AsyncMock()
+    guard = PresenceGuard()
+    guard.update_state("on")
+
+    handler = EventHandler(config, mock_ha, mock_store, guard, publisher=publisher)
+    await handler.on_motion(camera)
+
+    mock_store.append.assert_called_once()
+    stored_event = mock_store.append.call_args[0][1]
+    publisher.on_motion.assert_awaited_once_with(stored_event)
+
+
+async def test_on_motion_survives_publisher_failure(camera, config):
+    mock_ha = AsyncMock()
+    mock_ha.camera_snapshot = AsyncMock(return_value=True)
+    mock_store = MagicMock()
+    publisher = AsyncMock()
+    publisher.on_motion = AsyncMock(side_effect=RuntimeError("HA down"))
+    broadcaster = MagicMock()
+    guard = PresenceGuard()
+    guard.update_state("on")
+
+    handler = EventHandler(config, mock_ha, mock_store, guard, broadcaster, publisher)
+    await handler.on_motion(camera)  # must not raise
+
+    mock_store.append.assert_called_once()
+    broadcaster.publish.assert_called_once()

@@ -52,6 +52,20 @@ copied into the image by the Dockerfile). Key constraints:
 - `_lightbox.html.j2` is a shared include; its chrome uses fixed light-on-dark
   colors (not theme tokens) because it sits over a dark photo backdrop.
 
+## Add-on presentation files
+
+Home Assistant reads these from the **add-on directory**, next to `config.yaml`
+— never from the repo root (same trap as the changelog):
+
+- `DOCS.md` — the Documentation tab. Documents every option in `config.yaml`'s
+  `schema:`; when you add an option, add it here too.
+- `README.md` — the short store blurb. The repo-root `README.md` is the GitHub
+  landing page and is a **separate file with overlapping content** — if you
+  change the option reference or feature list, check whether both need it.
+- `icon.png` — 128x128, square.
+- `logo.png` — 250x100. Both use a solid brand panel so they stay legible on
+  light and dark HA themes.
+
 ## Releasing
 
 The version lives in **one place**: `version:` in
